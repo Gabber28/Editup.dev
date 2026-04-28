@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { auditDiff } from "../../verification/diff-audit.js";
-import type { EditPlan } from "../../src/types/edit-plan.js";
+import { auditDiff } from "@verify/diff-audit.js";
+import type { EditPlan } from "@/types/edit-plan.js";
 
 const plan: EditPlan = {
   summary: "test",

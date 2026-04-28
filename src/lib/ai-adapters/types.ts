@@ -1,6 +1,6 @@
-import type { EnrichedSnapshot } from "../../types/snapshot.js";
-import type { EditPlan } from "../../types/edit-plan.js";
-import type { ExecuteResult } from "../../types/execute.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
+import type { EditPlan } from "@/types/edit-plan.js";
+import type { ExecuteResult } from "@/types/execute.js";
 
 export type AdapterType = "cli" | "mcp" | "sdk" | "clipboard";
 

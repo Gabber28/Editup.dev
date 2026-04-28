@@ -25,7 +25,8 @@
       "Bash(taskkill //F //PID 15492)",
       "Bash(CI=true pnpm test:unit)",
       "Bash(pnpm typecheck *)",
-      "Bash(CI=true pnpm inject:build)"
+      "Bash(CI=true pnpm inject:build)",
+      "Bash(xargs wc *)"
     ]
   }
 }

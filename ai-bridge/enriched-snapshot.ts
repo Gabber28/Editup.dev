@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { EnrichedSnapshot } from "../src/types/snapshot.js";
-import { SchemaValidationError } from "../src/lib/errors.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
+import { SchemaValidationError } from "@/lib/errors.js";
 
 const StylingFrameworkSchema = z.enum([
   "tailwind",

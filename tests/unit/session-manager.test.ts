@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { SessionManager } from "../../src/lib/ai-adapters/session-manager.js";
-import { SessionConflictError } from "../../src/lib/errors.js";
+import { SessionManager } from "@/lib/ai-adapters/session-manager.js";
+import { SessionConflictError } from "@/lib/errors.js";
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

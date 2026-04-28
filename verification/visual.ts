@@ -1,4 +1,4 @@
-import type { EnrichedSnapshot, CSSChange } from "../src/types/snapshot.js";
+import type { EnrichedSnapshot, CSSChange } from "@/types/snapshot.js";
 
 const PIXEL_TOLERANCE = 5;
 const RGB_CHANNEL_TOLERANCE = 15;

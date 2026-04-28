@@ -1,4 +1,4 @@
-import type { EditPlan } from "../src/types/edit-plan.js";
+import type { EditPlan } from "@/types/edit-plan.js";
 
 const SENSITIVE_FILE_PATTERNS = [
   /package\.json$/,

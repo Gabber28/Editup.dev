@@ -1,5 +1,5 @@
-import type { EnrichedSnapshot } from "../src/types/snapshot.js";
-import { escapeXml, sanitizeForPrompt } from "../src/lib/sanitize.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
+import { escapeXml, sanitizeForPrompt } from "@/lib/sanitize.js";
 
 const PLAN_INSTRUCTION = `You are EditUp's planning assistant. The developer made visual CSS changes to an element in their running app. You have READ-ONLY access to their project.
 

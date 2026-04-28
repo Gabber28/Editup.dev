@@ -1,13 +1,13 @@
-import type { EnrichedSnapshot } from "../src/types/snapshot.js";
-import type { EditPlan } from "../src/types/edit-plan.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
+import type { EditPlan } from "@/types/edit-plan.js";
 import type {
   AIAdapter,
   AdapterContext,
-} from "../src/lib/ai-adapters/types.js";
-import type { ExecuteResult, VerificationResult } from "../src/types/execute.js";
+} from "@/lib/ai-adapters/types.js";
+import type { ExecuteResult, VerificationResult } from "@/types/execute.js";
 import type { VisualCheckResult } from "./visual.js";
-import { runExecute } from "../ai-bridge/execute.js";
-import { logger } from "../src/lib/logger.js";
+import { runExecute } from "@bridge/execute.js";
+import { logger } from "@/lib/logger.js";
 
 const MAX_CORRECTION_ATTEMPTS = 2;
 

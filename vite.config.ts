@@ -15,6 +15,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
       "@bridge": path.resolve(__dirname, "ai-bridge"),
       "@verify": path.resolve(__dirname, "verification"),
+      "@injected": path.resolve(__dirname, "injected"),
     },
   },
   build: {

@@ -1,9 +1,9 @@
 import type { AIAdapter, AdapterContext } from "./types.js";
-import type { EnrichedSnapshot } from "../../types/snapshot.js";
-import type { EditPlan } from "../../types/edit-plan.js";
-import type { ExecuteResult } from "../../types/execute.js";
-import { buildPlanPrompt } from "../../../ai-bridge/prompt.js";
-import { EditUpError } from "../errors.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
+import type { EditPlan } from "@/types/edit-plan.js";
+import type { ExecuteResult } from "@/types/execute.js";
+import { buildPlanPrompt } from "@bridge/prompt.js";
+import { EditUpError } from "@/lib/errors.js";
 
 export interface ClipboardWriter {
   write(text: string): Promise<void>;

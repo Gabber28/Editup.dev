@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   MCPServer,
   assertLocalhostBinding,
-} from "../../src/lib/ai-adapters/mcp-server.js";
-import { SecurityViolationError } from "../../src/lib/errors.js";
+} from "@/lib/ai-adapters/mcp-server.js";
+import { SecurityViolationError } from "@/lib/errors.js";
 
 describe("security — MCP server binding", () => {
   it("rejects 0.0.0.0 binding", () => {

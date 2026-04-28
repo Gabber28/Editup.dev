@@ -1,13 +1,13 @@
-import type { EnrichedSnapshot } from "../src/types/snapshot.js";
-import type { EditPlan } from "../src/types/edit-plan.js";
-import type { ExecuteResult, VerificationResult } from "../src/types/execute.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
+import type { EditPlan } from "@/types/edit-plan.js";
+import type { ExecuteResult, VerificationResult } from "@/types/execute.js";
 import type {
   AIAdapter,
   AdapterContext,
-} from "../src/lib/ai-adapters/types.js";
+} from "@/lib/ai-adapters/types.js";
 import { runPlan } from "./plan.js";
 import { runExecute } from "./execute.js";
-import { logger } from "../src/lib/logger.js";
+import { logger } from "@/lib/logger.js";
 
 export type OrchestratorPhase =
   | "idle"

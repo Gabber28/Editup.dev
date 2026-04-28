@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { parseEnrichedSnapshot } from "../../ai-bridge/enriched-snapshot.js";
-import { SchemaValidationError } from "../../src/lib/errors.js";
-import type { EnrichedSnapshot } from "../../src/types/snapshot.js";
+import { parseEnrichedSnapshot } from "@bridge/enriched-snapshot.js";
+import { SchemaValidationError } from "@/lib/errors.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
 
 const valid: EnrichedSnapshot = {
   element: {

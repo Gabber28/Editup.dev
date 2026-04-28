@@ -1,12 +1,12 @@
 import type { AIAdapter, AdapterContext } from "./types.js";
-import type { EnrichedSnapshot } from "../../types/snapshot.js";
-import type { EditPlan } from "../../types/edit-plan.js";
-import type { ExecuteResult } from "../../types/execute.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
+import type { EditPlan } from "@/types/edit-plan.js";
+import type { ExecuteResult } from "@/types/execute.js";
 import { spawnSafe } from "./spawn-safe.js";
-import { buildPlanPrompt, buildExecutePrompt } from "../../../ai-bridge/prompt.js";
-import { extractEditPlanFromText } from "../../../ai-bridge/edit-plan.js";
-import { PlanFailedError, ExecuteFailedError } from "../errors.js";
-import { logger } from "../logger.js";
+import { buildPlanPrompt, buildExecutePrompt } from "@bridge/prompt.js";
+import { extractEditPlanFromText } from "@bridge/edit-plan.js";
+import { PlanFailedError, ExecuteFailedError } from "@/lib/errors.js";
+import { logger } from "@/lib/logger.js";
 
 const PLAN_ALLOWED_TOOLS = "Read,Glob,Grep";
 const EXECUTE_ALLOWED_TOOLS = "Read,Glob,Grep,Edit";

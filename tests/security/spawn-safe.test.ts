@@ -3,8 +3,8 @@ import {
   assertSafeArgs,
   assertHasAllowedTools,
   assertCommandSafety,
-} from "../../src/lib/ai-adapters/spawn-safe.js";
-import { SecurityViolationError } from "../../src/lib/errors.js";
+} from "@/lib/ai-adapters/spawn-safe.js";
+import { SecurityViolationError } from "@/lib/errors.js";
 
 describe("security — spawn-safe", () => {
   it("rejects --dangerously-skip-permissions", () => {

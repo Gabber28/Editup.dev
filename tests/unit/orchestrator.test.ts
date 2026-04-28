@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { Orchestrator } from "../../ai-bridge/orchestrator.js";
+import { Orchestrator } from "@bridge/orchestrator.js";
 import type {
   AIAdapter,
   AdapterContext,
-} from "../../src/lib/ai-adapters/types.js";
-import type { EnrichedSnapshot } from "../../src/types/snapshot.js";
-import type { EditPlan } from "../../src/types/edit-plan.js";
-import type { ExecuteResult } from "../../src/types/execute.js";
+} from "@/lib/ai-adapters/types.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
+import type { EditPlan } from "@/types/edit-plan.js";
+import type { ExecuteResult } from "@/types/execute.js";
 
 const snapshot: EnrichedSnapshot = {
   element: { tag: "button", classes: ["btn"] },

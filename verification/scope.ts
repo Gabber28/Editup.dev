@@ -1,4 +1,4 @@
-import type { EnrichedSnapshot } from "../src/types/snapshot.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
 
 export interface ElementSnapshot {
   selector: string;

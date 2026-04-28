@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { parseEditPlan } from "../../ai-bridge/edit-plan.js";
-import { SchemaValidationError } from "../../src/lib/errors.js";
-import type { EditPlan } from "../../src/types/edit-plan.js";
+import { parseEditPlan } from "@bridge/edit-plan.js";
+import { SchemaValidationError } from "@/lib/errors.js";
+import type { EditPlan } from "@/types/edit-plan.js";
 
 const base: EditPlan = {
   summary: "test",

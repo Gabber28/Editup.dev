@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   buildPlanPrompt,
   buildExecutePrompt,
-} from "../../ai-bridge/prompt.js";
-import type { EnrichedSnapshot } from "../../src/types/snapshot.js";
+} from "@bridge/prompt.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
 
 const snapshot: EnrichedSnapshot = {
   element: {

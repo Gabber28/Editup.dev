@@ -3,7 +3,7 @@ import {
   escapeXml,
   wrapCdata,
   sanitizeForPrompt,
-} from "../../src/lib/sanitize.js";
+} from "@/lib/sanitize.js";
 
 describe("sanitize", () => {
   it("escapes XML special chars", () => {

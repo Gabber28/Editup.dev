@@ -4,9 +4,9 @@ import {
   tryParseEditPlan,
   extractEditPlanFromText,
   EditPlanSchema,
-} from "../../ai-bridge/edit-plan.js";
-import { SchemaValidationError } from "../../src/lib/errors.js";
-import type { EditPlan } from "../../src/types/edit-plan.js";
+} from "@bridge/edit-plan.js";
+import { SchemaValidationError } from "@/lib/errors.js";
+import type { EditPlan } from "@/types/edit-plan.js";
 
 const validPlan: EditPlan = {
   summary: "Change button bg to black",

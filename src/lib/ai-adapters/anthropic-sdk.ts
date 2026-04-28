@@ -1,10 +1,10 @@
 import type { AIAdapter, AdapterContext } from "./types.js";
-import type { EnrichedSnapshot } from "../../types/snapshot.js";
-import type { EditPlan } from "../../types/edit-plan.js";
-import type { ExecuteResult } from "../../types/execute.js";
-import { buildPlanPrompt } from "../../../ai-bridge/prompt.js";
-import { extractEditPlanFromText } from "../../../ai-bridge/edit-plan.js";
-import { PlanFailedError, EditUpError } from "../errors.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
+import type { EditPlan } from "@/types/edit-plan.js";
+import type { ExecuteResult } from "@/types/execute.js";
+import { buildPlanPrompt } from "@bridge/prompt.js";
+import { extractEditPlanFromText } from "@bridge/edit-plan.js";
+import { PlanFailedError, EditUpError } from "@/lib/errors.js";
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 const DEFAULT_TIMEOUT_MS = 180_000;

@@ -1,14 +1,14 @@
 import type { AIAdapter, AdapterContext } from "./types.js";
-import type { EnrichedSnapshot } from "../../types/snapshot.js";
-import type { EditPlan } from "../../types/edit-plan.js";
-import type { ExecuteResult } from "../../types/execute.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
+import type { EditPlan } from "@/types/edit-plan.js";
+import type { ExecuteResult } from "@/types/execute.js";
 import { spawnSafe } from "./spawn-safe.js";
 import {
   buildPlanPrompt,
   buildExecutePrompt,
-} from "../../../ai-bridge/prompt.js";
-import { extractEditPlanFromText } from "../../../ai-bridge/edit-plan.js";
-import { PlanFailedError, ExecuteFailedError } from "../errors.js";
+} from "@bridge/prompt.js";
+import { extractEditPlanFromText } from "@bridge/edit-plan.js";
+import { PlanFailedError, ExecuteFailedError } from "@/lib/errors.js";
 
 const DEFAULT_TIMEOUT_MS = 180_000;
 

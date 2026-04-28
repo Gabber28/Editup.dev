@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { checkVisual } from "../../verification/visual.js";
-import type { EnrichedSnapshot } from "../../src/types/snapshot.js";
+import { checkVisual } from "@verify/visual.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
 
 const baseSnapshot: EnrichedSnapshot = {
   element: { tag: "button", classes: ["btn"] },

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { EditPlan } from "../src/types/edit-plan.js";
-import { SchemaValidationError } from "../src/lib/errors.js";
+import type { EditPlan } from "@/types/edit-plan.js";
+import { SchemaValidationError } from "@/lib/errors.js";
 
 const ChangeTypeSchema = z.enum([
   "target",

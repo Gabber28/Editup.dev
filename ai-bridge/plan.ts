@@ -1,12 +1,12 @@
-import type { EnrichedSnapshot } from "../src/types/snapshot.js";
-import type { EditPlan } from "../src/types/edit-plan.js";
+import type { EnrichedSnapshot } from "@/types/snapshot.js";
+import type { EditPlan } from "@/types/edit-plan.js";
 import type {
   AIAdapter,
   AdapterContext,
-} from "../src/lib/ai-adapters/types.js";
+} from "@/lib/ai-adapters/types.js";
 import { tryParseEditPlan } from "./edit-plan.js";
-import { PlanFailedError } from "../src/lib/errors.js";
-import { logger } from "../src/lib/logger.js";
+import { PlanFailedError } from "@/lib/errors.js";
+import { logger } from "@/lib/logger.js";
 
 const MAX_PLAN_ATTEMPTS = 2;
 
