@@ -26,7 +26,8 @@
       "Bash(CI=true pnpm test:unit)",
       "Bash(pnpm typecheck *)",
       "Bash(CI=true pnpm inject:build)",
-      "Bash(xargs wc *)"
+      "Bash(xargs wc *)",
+      "Bash(xargs grep *)"
     ]
   }
 }
