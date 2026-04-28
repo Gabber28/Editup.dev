@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --version && pnpm --version)",
+      "Bash(npm install:*)",
+      "Bash(pnpm create:*)",
+      "Bash(cd \"C:/Users/gabri/Documents/codigos/SaaS's/Editup.dev\" && yes \"\" | pnpm dlx create-next-app@latest landing --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-pnpm --turbopack 2>&1)",
+      "Bash(find \"/c/Users/gabri/Documents/codigos/SaaS's/Editup.dev/landing/node_modules/next/dist/docs\" -type f -name \"*cache*\" -o -name \"*api*\" 2>/dev/null | head -10)",
+      "WebFetch(domain:www.blitzit.app)",
+      "Read(//c/Users/gabri/Documents/codigos/SaaS''''''''s/Editup.dev/**)",
+      "Bash(npx next:*)",
+      "Bash(pdftotext -layout \"editup-review-v2.md.pdf\" \"editup-review-v2.txt\")",
+      "Read(//c/c/Users/gabri/Documents/codigos/SaaS's/Editup.dev/**)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm dev *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(curl -sL http://localhost:3000)",
+      "Bash(powershell *)",
+      "PowerShell($r = Invoke-WebRequest -Uri 'http://localhost:3000' -UseBasicParsing; $r.Content.Length; if \\($r.Content -match 'Founder'\\) { \"Found: Founder\" } else { \"NOT found: Founder\" }; if \\($r.Content -match 'auto-committed'\\) { \"Found: auto-committed\" } else { \"NOT found: auto-committed\" }; if \\($r.Content -match 'First 100'\\) { \"Found: First 100\" } else { \"NOT found: First 100\" })",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri 'http://localhost:3000' -UseBasicParsing -TimeoutSec 10; Write-Output \"Content length: $\\($r.Content.Length\\)\"; @\\('Founder','auto-committed','First 100','Copy Prompt','3-layer','One-click revert'\\) | ForEach-Object { if \\($r.Content -match [regex]::Escape\\($_\\)\\) { Write-Output \"FOUND: $_\" } else { Write-Output \"MISSING: $_\" } } } catch { Write-Output \"ERROR: $_\" })",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //F //PID 9724)",
+      "Bash(taskkill //F //PID 15492)",
+      "Bash(CI=true pnpm test:unit)",
+      "Bash(pnpm typecheck *)",
+      "Bash(CI=true pnpm inject:build)"
+    ]
+  }
+}

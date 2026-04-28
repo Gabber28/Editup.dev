@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts
+dist/
+build/
+out/
+.next/
+src-tauri/target/
+src-tauri/gen/
+injected/dist/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.editup/license
+~/.editup/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs & test output
+*.log
+npm-debug.log*
+playwright-report/
+test-results/
+coverage/
+
+# Tauri
+*.app
+*.dmg
+*.deb
+*.AppImage
+*.msi
+*.exe
+
+# OS
+.DS_Store
+desktop.ini
