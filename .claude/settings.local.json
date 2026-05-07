@@ -27,7 +27,16 @@
       "Bash(pnpm typecheck *)",
       "Bash(CI=true pnpm inject:build)",
       "Bash(xargs wc *)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "PowerShell(Test-Path *)",
+      "Bash(npx tsc *)",
+      "Bash(cargo check *)",
+      "PowerShell(Get-Command *)",
+      "Bash(npx vitest *)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\gabri\\\\Documents\\\\codigos\\\\SaaS's\\\\Editup.dev\\\\tests\\\\e2e\" | ForEach-Object { Write-Host $_.FullName })",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\gabri\\\\Documents\\\\codigos\\\\SaaS's\\\\Editup.dev\" -Recurse -Name)",
+      "Bash(Select-String -Pattern \"\\(orchestrator|plan|execute|visual|correction|diff-audit|license-gate\\)\")",
+      "Bash(npx playwright *)"
     ]
   }
 }

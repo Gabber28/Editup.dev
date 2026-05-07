@@ -5,7 +5,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
-use hyper::header::{HeaderName, HeaderValue, CONNECTION, HOST, UPGRADE};
+use hyper::header::{HeaderName, HeaderValue, HOST};
 use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
@@ -13,16 +13,15 @@ use tauri::AppHandle;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 
-use crate::security::{
-    assert_localhost_bind, validate_host_header, SessionToken, LOCALHOST,
-};
-use crate::ws::validate_ws_handshake;
+use crate::security::{assert_localhost_bind, validate_host_header, SessionToken, LOCALHOST};
+use crate::ws::WS_PORT;
 
 pub const PROXY_PORT: u16 = 9200;
 
 pub struct ProxyState {
     pub session_token: SessionToken,
     pub target_origin: RwLock<Option<String>>,
+    pub project_root: RwLock<Option<String>>,
 }
 
 impl ProxyState {
@@ -30,6 +29,7 @@ impl ProxyState {
         Arc::new(Self {
             session_token: SessionToken::new(),
             target_origin: RwLock::new(None),
+            project_root: RwLock::new(None),
         })
     }
 
@@ -37,6 +37,23 @@ impl ProxyState {
         validate_target_origin(&origin)?;
         *self.target_origin.write().await = Some(origin);
         Ok(())
+    }
+
+    pub async fn set_project_root(&self, path: String) -> Result<(), String> {
+        let p = std::path::Path::new(&path);
+        if !p.is_dir() {
+            return Err(format!("not a directory: {path}"));
+        }
+        *self.project_root.write().await = Some(path);
+        Ok(())
+    }
+
+    pub async fn require_project_root(&self) -> Result<String, String> {
+        self.project_root
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| "project root not set".to_string())
     }
 }
 
@@ -89,35 +106,6 @@ pub async fn start_proxy(
     }
 }
 
-fn is_websocket_upgrade(req: &Request<Incoming>) -> bool {
-    let conn = req
-        .headers()
-        .get(CONNECTION)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_lowercase();
-    let upgrade = req
-        .headers()
-        .get(UPGRADE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_lowercase();
-    conn.contains("upgrade") && upgrade == "websocket"
-}
-
-fn token_from_query(uri_query: Option<&str>) -> Option<&str> {
-    let q = uri_query?;
-    for pair in q.split('&') {
-        let mut split = pair.splitn(2, '=');
-        let k = split.next()?;
-        let v = split.next()?;
-        if k == "token" {
-            return Some(v);
-        }
-    }
-    None
-}
-
 async fn handle_request(
     req: Request<Incoming>,
     state: Arc<ProxyState>,
@@ -132,29 +120,19 @@ async fn handle_request(
         return Ok(error_response(StatusCode::FORBIDDEN, "invalid host"));
     }
 
-    if is_websocket_upgrade(&req) {
-        let origin = req
-            .headers()
-            .get("origin")
-            .and_then(|v| v.to_str().ok());
-        let token = token_from_query(req.uri().query());
-        if let Err(reason) = validate_ws_handshake(
-            host_value.as_deref(),
-            origin,
-            token,
-            &state.session_token,
-        ) {
-            tracing::warn!("rejecting WS upgrade: {reason}");
-            return Ok(error_response(StatusCode::FORBIDDEN, reason));
-        }
-    }
-
     if req.uri().path() == "/__editup__/health" {
         return Ok(text_response(StatusCode::OK, "ok"));
     }
 
     if req.uri().path() == "/__editup__/agent.js" {
         return Ok(serve_agent_script());
+    }
+
+    if req.uri().path() == "/__editup__/ws" {
+        return Ok(text_response(
+            StatusCode::BAD_REQUEST,
+            "WebSocket moved to ws://127.0.0.1:9201",
+        ));
     }
 
     let target = state.target_origin.read().await.clone();
@@ -256,8 +234,8 @@ async fn forward_request(
 fn inject_agent_script(html: &[u8], token: &SessionToken) -> Vec<u8> {
     let html_str = String::from_utf8_lossy(html);
     let snippet = format!(
-        r#"<script>window.__EDITUP_CONFIG__={{wsUrl:"ws://127.0.0.1:{}/__editup__/ws?token={}",sessionToken:"{}"}};</script><script src="/__editup__/agent.js" defer></script>"#,
-        PROXY_PORT,
+        r#"<script>window.__EDITUP_CONFIG__={{wsUrl:"ws://127.0.0.1:{}?token={}",sessionToken:"{}"}};</script><script src="/__editup__/agent.js" defer></script>"#,
+        WS_PORT,
         token.as_str(),
         token.as_str()
     );

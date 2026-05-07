@@ -24,7 +24,15 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:9200 ws://127.0.0.1:9200; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:9200 ws://127.0.0.1:9201; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://releases.editup.dev/{{target}}/{{arch}}/{{current_version}}"
+      ],
+      "pubkey": ""
     }
   },
   "bundle": {

@@ -1,4 +1,137 @@
-use crate::security::{validate_host_header, validate_origin, SessionToken};
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+use futures_util::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
+use tokio::net::TcpListener;
+use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio_tungstenite::tungstenite::Message;
+
+use crate::security::{validate_host_header, validate_origin, SessionToken, LOCALHOST};
+
+pub const WS_PORT: u16 = 9201;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentMessage {
+    #[serde(rename = "type")]
+    pub msg_type: String,
+    pub payload: Option<serde_json::Value>,
+    pub token: Option<String>,
+}
+
+pub struct WsState {
+    pub to_agent_tx: broadcast::Sender<String>,
+    pub from_agent_tx: mpsc::Sender<AgentMessage>,
+    pub connected: Arc<RwLock<bool>>,
+    session_token: SessionToken,
+}
+
+impl WsState {
+    pub fn new(from_agent_tx: mpsc::Sender<AgentMessage>, session_token: SessionToken) -> Self {
+        let (to_agent_tx, _) = broadcast::channel(64);
+        Self {
+            to_agent_tx,
+            from_agent_tx,
+            connected: Arc::new(RwLock::new(false)),
+            session_token,
+        }
+    }
+}
+
+pub async fn start_ws_server(
+    state: Arc<WsState>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let addr = SocketAddr::new(LOCALHOST, WS_PORT);
+    let listener = TcpListener::bind(addr).await?;
+    tracing::info!("editup ws listening on ws://{addr}");
+
+    loop {
+        let (stream, peer) = listener.accept().await?;
+        if peer.ip() != LOCALHOST {
+            tracing::warn!("rejecting non-localhost ws peer: {peer}");
+            drop(stream);
+            continue;
+        }
+        let state = state.clone();
+        tokio::spawn(async move {
+            let ws = match tokio_tungstenite::accept_async(stream).await {
+                Ok(ws) => ws,
+                Err(err) => {
+                    tracing::warn!("ws handshake failed: {err}");
+                    return;
+                }
+            };
+            handle_connection(ws, state).await;
+        });
+    }
+}
+
+async fn handle_connection<S>(
+    ws: tokio_tungstenite::WebSocketStream<S>,
+    state: Arc<WsState>,
+) where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let (mut sink, mut stream) = ws.split();
+
+    let hello = match tokio::time::timeout(std::time::Duration::from_secs(5), stream.next()).await
+    {
+        Ok(Some(Ok(Message::Text(text)))) => serde_json::from_str::<AgentMessage>(&text).ok(),
+        _ => None,
+    };
+
+    let valid = hello
+        .as_ref()
+        .filter(|m| m.msg_type == "hello")
+        .and_then(|m| m.token.as_deref())
+        .map(|t| state.session_token.verify(t).is_ok())
+        .unwrap_or(false);
+
+    if !valid {
+        tracing::warn!("ws: invalid or missing hello/token");
+        let _ = sink.close().await;
+        return;
+    }
+
+    *state.connected.write().await = true;
+    tracing::info!("agent connected via WebSocket");
+
+    let mut to_agent_rx = state.to_agent_tx.subscribe();
+    let from_agent_tx = state.from_agent_tx.clone();
+
+    loop {
+        tokio::select! {
+            msg = stream.next() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        if let Ok(parsed) = serde_json::from_str::<AgentMessage>(&text) {
+                            let _ = from_agent_tx.send(parsed).await;
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    Some(Err(err)) => {
+                        tracing::debug!("ws recv error: {err}");
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            msg = to_agent_rx.recv() => {
+                match msg {
+                    Ok(text) => {
+                        if sink.send(Message::Text(text)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
+    }
+
+    *state.connected.write().await = false;
+    tracing::info!("agent disconnected");
+}
 
 pub fn validate_ws_handshake(
     host: Option<&str>,

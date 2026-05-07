@@ -32,6 +32,19 @@ export function checkVisual(input: VisualCheckInput): VisualCheckResult {
       });
       continue;
     }
+
+    if (change.change_source === "text_instruction") {
+      if (actual === change.before_computed) {
+        divergences.push({
+          property: change.property,
+          expected: "(any change)",
+          actual,
+          reason: "text instruction change: value unchanged",
+        });
+      }
+      continue;
+    }
+
     const result = compareValues(
       change.expected_final_computed,
       actual,

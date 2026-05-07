@@ -18,13 +18,8 @@ export class AiderAdapter implements AIAdapter {
 
   async detect(): Promise<boolean> {
     try {
-      const result = await spawnSafe({
-        cmd: process.platform === "win32" ? "where" : "which",
-        args: ["aider"],
-        cwd: process.cwd(),
-        timeoutMs: 5_000,
-      });
-      return result.exitCode === 0;
+      const { detectCliViaTauri } = await import("./spawn-tauri.js");
+      return await detectCliViaTauri("aider");
     } catch {
       return false;
     }

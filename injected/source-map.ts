@@ -60,10 +60,30 @@ export function lookupReactFiber(el: Element): ElementSourceLookup {
   };
 }
 
-export function lookupElementSource(el: Element): ElementSourceLookup {
+export async function lookupElementSource(el: Element): Promise<ElementSourceLookup> {
   const react = lookupReactFiber(el);
-  if (react.source || react.componentName) return react;
-  return {};
+  if (react.source) return react;
+
+  try {
+    const { resolveFromSourceMap } = await import("./source-map-fetch.js");
+    const scripts = document.querySelectorAll("script[src]");
+    for (const script of scripts) {
+      const src = script.getAttribute("src");
+      if (!src) continue;
+      const url = new URL(src, location.href).href;
+      const loc = await resolveFromSourceMap(url, 1, 0);
+      if (loc) {
+        return {
+          componentName: react.componentName,
+          source: loc,
+        };
+      }
+    }
+  } catch {
+    // source map resolution unavailable
+  }
+
+  return react;
 }
 
 export { REACT_PROPS_PREFIX, REACT_INTERNAL_INSTANCE };

@@ -57,6 +57,7 @@ pub fn validate_origin(origin: Option<&str>) -> Result<(), SecurityError> {
     }
 }
 
+#[derive(Clone)]
 pub struct SessionToken(String);
 
 impl SessionToken {

@@ -1,4 +1,4 @@
-import type { JSX } from "react";
+import { useEffect, useRef, type JSX } from "react";
 import type { EditPlan } from "../../types/edit-plan.js";
 
 export interface ApprovalToastProps {
@@ -10,14 +10,33 @@ export interface ApprovalToastProps {
 
 export function ApprovalToast(props: ApprovalToastProps): JSX.Element {
   const { plan } = props;
+  const containerRef = useRef<HTMLDivElement>(null);
   const expanded =
     plan.confidence === "low" ||
     plan.recommended_action === "consider_alternatives";
 
   const fileNames = plan.files.map((f) => f.path).join(", ");
 
+  useEffect(() => {
+    containerRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handler = (ev: KeyboardEvent): void => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        props.onApprove();
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
+        props.onReject();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return (): void => document.removeEventListener("keydown", handler);
+  }, [props.onApprove, props.onReject]);
+
   return (
-    <div className="toast" role="alertdialog">
+    <div className="toast" role="alertdialog" ref={containerRef} tabIndex={-1}>
       <div className="toast__title">
         Apply changes? ({plan.files.length} {plan.files.length === 1 ? "file" : "files"})
       </div>
@@ -33,7 +52,7 @@ export function ApprovalToast(props: ApprovalToastProps): JSX.Element {
             color: "var(--color-accent-light)",
           }}
         >
-          ⚠ {plan.side_effects.join("; ")}
+          Side effects: {plan.side_effects.join("; ")}
         </div>
       )}
 
@@ -54,7 +73,7 @@ export function ApprovalToast(props: ApprovalToastProps): JSX.Element {
           className="toast__btn toast__btn--primary"
           onClick={props.onApprove}
         >
-          Apply
+          Apply (Enter)
         </button>
         {props.onShowDetails && (
           <button
@@ -70,7 +89,7 @@ export function ApprovalToast(props: ApprovalToastProps): JSX.Element {
           className="toast__btn"
           onClick={props.onReject}
         >
-          Cancel
+          Cancel (Esc)
         </button>
       </div>
     </div>

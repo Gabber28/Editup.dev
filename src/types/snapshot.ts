@@ -39,6 +39,7 @@ export interface CSSChange {
   after_computed: string;
   before_source_rule?: string;
   expected_final_computed: string;
+  change_source?: "visual" | "text_instruction";
 }
 
 export interface EnrichedSnapshot {

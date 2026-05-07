@@ -8,7 +8,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: [["html"], ["list"]],
   use: {
-    baseURL: "http://127.0.0.1:9200",
+    baseURL: "http://localhost:5173",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
@@ -18,5 +18,11 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
+  webServer: {
+    command: "npx vite --port 5173",
+    url: "http://localhost:5173",
+    reuseExistingServer: !process.env.CI,
+    timeout: 30_000,
+  },
   timeout: 30_000,
 });
