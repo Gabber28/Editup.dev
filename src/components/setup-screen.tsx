@@ -3,7 +3,7 @@ import { useState, type JSX } from "react";
 export interface SetupScreenProps {
   proxyPort: number;
   agentConnected: boolean;
-  onConnect: (url: string) => Promise<void>;
+  onConnect: (url: string, proxyPort: number) => Promise<void>;
   onReady: (projectRoot: string) => void;
   error: string | null;
   loading: boolean;
@@ -56,7 +56,7 @@ export function SetupScreen(props: SetupScreenProps): JSX.Element {
           onSubmit={(ev): void => {
             ev.preventDefault();
             if (!url.trim() || props.loading) return;
-            props.onConnect(url.trim());
+            props.onConnect(url.trim(), props.proxyPort);
           }}
         >
           <input

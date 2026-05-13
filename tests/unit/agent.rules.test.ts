@@ -1,23 +1,33 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { captureMatchingRules } from "@injected/style-capture.js";
 
+class FakeCSSStyleRule {
+  readonly selectorText: string;
+  readonly cssText: string;
+  readonly type = 1;
+  constructor(selector: string, text: string) {
+    this.selectorText = selector;
+    this.cssText = text;
+  }
+}
+Object.setPrototypeOf(FakeCSSStyleRule.prototype, CSSStyleRule.prototype);
+
 function makeCSSStyleRule(
   selectorText: string,
   cssText: string
 ): CSSStyleRule {
-  return {
-    selectorText,
-    cssText,
-    type: CSSRule.STYLE_RULE,
-  } as unknown as CSSStyleRule;
+  return new FakeCSSStyleRule(selectorText, cssText) as unknown as CSSStyleRule;
 }
 
 function makeCSSRuleList(rules: CSSRule[]): CSSRuleList {
-  const list = rules as unknown as CSSRuleList;
-  Object.defineProperty(list, "length", { value: rules.length });
-  (list as unknown as Record<string, unknown>)[Symbol.iterator] =
-    (): Iterator<CSSRule> => rules[Symbol.iterator]();
-  return list;
+  const list: Record<string | symbol, unknown> = {};
+  for (let i = 0; i < rules.length; i++) list[i] = rules[i];
+  list["length"] = rules.length;
+  list["item"] = (idx: number): CSSRule | null => rules[idx] ?? null;
+  list[Symbol.iterator] = function* (): Iterator<CSSRule> {
+    for (const r of rules) yield r;
+  };
+  return list as unknown as CSSRuleList;
 }
 
 function makeStyleSheet(

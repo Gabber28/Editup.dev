@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { ElementInfo } from "@/types/snapshot.js";
+import type { ElementInfo, PseudoStateRule } from "@/types/snapshot.js";
 
 export interface AgentSnapshot {
   element: ElementInfo;
@@ -15,8 +14,10 @@ export interface AgentSnapshot {
       string,
       { value: string; declared_in: string }
     >;
+    pseudo_rules?: PseudoStateRule[];
   };
   computed_style: Record<string, string>;
+  base_computed_style?: Record<string, string>;
 }
 
 export interface AgentConnection {
@@ -26,6 +27,7 @@ export interface AgentConnection {
   startEditing: () => Promise<void>;
   stopEditing: () => Promise<void>;
   previewStyle: (property: string, value: string) => Promise<void>;
+  previewPseudoStyle: (property: string, value: string, pseudo: string) => Promise<void>;
   resetOverrides: () => Promise<void>;
 }
 
@@ -34,6 +36,7 @@ export function useAgentConnection(): AgentConnection {
   const [snapshot, setSnapshot] = useState<AgentSnapshot | null>(null);
   const [editing, setEditing] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const snapshotRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     pollingRef.current = setInterval(() => {
@@ -45,14 +48,15 @@ export function useAgentConnection(): AgentConnection {
   }, []);
 
   useEffect(() => {
-    const unlisteners: UnlistenFn[] = [];
-
-    listen<AgentSnapshot>("agent_snapshot", (event) => {
-      setSnapshot(event.payload);
-    }).then((fn) => unlisteners.push(fn));
-
+    snapshotRef.current = setInterval(() => {
+      invoke<AgentSnapshot | null>("get_latest_snapshot")
+        .then((snap) => {
+          if (snap) setSnapshot(snap);
+        })
+        .catch((_: unknown) => {});
+    }, 300);
     return (): void => {
-      for (const fn of unlisteners) fn();
+      if (snapshotRef.current !== null) clearInterval(snapshotRef.current);
     };
   }, []);
 
@@ -73,6 +77,13 @@ export function useAgentConnection(): AgentConnection {
     [],
   );
 
+  const previewPseudoStyle = useCallback(
+    async (property: string, value: string, pseudo: string) => {
+      await invoke("preview_pseudo_style", { property, value, pseudo });
+    },
+    [],
+  );
+
   const resetOverrides = useCallback(async () => {
     await invoke("reset_overrides");
   }, []);
@@ -84,6 +95,7 @@ export function useAgentConnection(): AgentConnection {
     startEditing,
     stopEditing,
     previewStyle,
+    previewPseudoStyle,
     resetOverrides,
   };
 }

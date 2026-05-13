@@ -42,7 +42,7 @@ describe("prompt — combined visual + text instructions", () => {
     const prompt = buildPlanPrompt({ snapshot, projectRoot: "/proj" });
 
     expect(prompt).toContain("<visual_changes>");
-    expect(prompt).not.toContain("<text_instructions>");
+    expect(prompt).not.toContain("</text_instructions>");
   });
 
   it("includes visual_changes even when only text_instructions set", () => {

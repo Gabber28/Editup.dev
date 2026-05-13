@@ -36,7 +36,10 @@ describe("agent session token — hello", () => {
 
   it("sends hello with session token on connect", () => {
     const ws = makeFakeWs();
-    vi.spyOn(globalThis, "WebSocket").mockImplementation(() => ws);
+    const OrigWs = globalThis.WebSocket;
+    const ctor = vi.fn(() => ws) as unknown as typeof WebSocket;
+    Object.assign(ctor, { OPEN: OrigWs.OPEN, CLOSED: OrigWs.CLOSED, CONNECTING: OrigWs.CONNECTING, CLOSING: OrigWs.CLOSING });
+    vi.stubGlobal("WebSocket", ctor);
     const cfg: AgentConfig = { wsUrl: "ws://127.0.0.1:9000", sessionToken: TOKEN };
     const agent = new EditUpAgent(cfg);
     agent.start();

@@ -36,7 +36,26 @@
       "PowerShell(Get-ChildItem \"C:\\\\Users\\\\gabri\\\\Documents\\\\codigos\\\\SaaS's\\\\Editup.dev\\\\tests\\\\e2e\" | ForEach-Object { Write-Host $_.FullName })",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\gabri\\\\Documents\\\\codigos\\\\SaaS's\\\\Editup.dev\" -Recurse -Name)",
       "Bash(Select-String -Pattern \"\\(orchestrator|plan|execute|visual|correction|diff-audit|license-gate\\)\")",
-      "Bash(npx playwright *)"
+      "Bash(npx playwright *)",
+      "Bash(npx vite *)",
+      "PowerShell(cargo *)",
+      "Bash(git mv *)",
+      "Bash(node -e \"console.log\\(typeof WebSocket\\)\")",
+      "Bash(node -e \"const jsdom = require\\('jsdom'\\); const dom = new jsdom.JSDOM\\(\\); const win = dom.window; const r = Object.create\\(win.CSSStyleRule.prototype\\); console.log\\(r instanceof win.CSSStyleRule, r instanceof win.CSSGroupingRule, r instanceof win.CSSRule\\)\")",
+      "PowerShell(winget install *)",
+      "PowerShell(rustup *)",
+      "PowerShell(cargo check *)",
+      "PowerShell($vswhere = \"${env:ProgramFiles\\(x86\\)}\\\\Microsoft Visual Studio\\\\Installer\\\\vswhere.exe\"; & $vswhere -latest -property installationPath)",
+      "PowerShell($vswhere = \"${env:ProgramFiles\\(x86\\)}\\\\Microsoft Visual Studio\\\\Installer\\\\vswhere.exe\"; & $vswhere -all -property installationPath -format json)",
+      "PowerShell(subst Z: *)",
+      "PowerShell(pnpm tauri *)",
+      "Bash(Get-ChildItem -Recurse -Directory -Depth 2)",
+      "Bash(Select-Object FullName)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3000\" -UseBasicParsing -TimeoutSec 5 | Select-Object StatusCode, StatusDescription, @{N='ContentLength';E={$_.Content.Length}})",
+      "Bash(pnpm inject:build)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(node scripts/build-injected.mjs)",
+      "PowerShell(Get-Process *)"
     ]
   }
 }

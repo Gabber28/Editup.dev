@@ -65,7 +65,7 @@ function walkRules(
 ): void {
   for (const rule of Array.from(list)) {
     visit(rule);
-    if (rule instanceof CSSGroupingRule) {
+    if (rule instanceof CSSGroupingRule && rule.cssRules) {
       walkRules(rule.cssRules, source, visit);
     }
   }
@@ -84,6 +84,71 @@ export function captureCSSVariables(
       declared_in: "<computed>",
     };
   }
+  return out;
+}
+
+export interface CapturedPseudoRule {
+  pseudo: string;
+  selector: string;
+  properties: Record<string, string>;
+  source_file: string;
+  line_number: number;
+}
+
+const PSEUDO_RE =
+  /:(hover|focus|active|focus-visible|focus-within|visited|checked|disabled)\b/;
+
+export function capturePseudoRules(el: Element): CapturedPseudoRule[] {
+  const results: CapturedPseudoRule[] = [];
+  for (const sheet of Array.from(document.styleSheets)) {
+    let cssRules: CSSRuleList | null = null;
+    try { cssRules = sheet.cssRules; } catch { continue; }
+    if (!cssRules) continue;
+    walkRules(cssRules, sheet.href ?? "<inline>", (rule) => {
+      if (!(rule instanceof CSSStyleRule)) return;
+      const sel = rule.selectorText;
+      const m = PSEUDO_RE.exec(sel);
+      if (!m) return;
+      const pseudo = `:${m[1]}`;
+      const base = sel.replace(PSEUDO_RE, "").trim();
+      if (!base) return;
+      try {
+        if (!el.matches(base)) return;
+      } catch { return; }
+      const props: Record<string, string> = {};
+      for (let i = 0; i < rule.style.length; i++) {
+        const p = rule.style.item(i);
+        if (p) props[p] = rule.style.getPropertyValue(p).trim();
+      }
+      if (Object.keys(props).length > 0) {
+        results.push({
+          pseudo,
+          selector: sel,
+          properties: props,
+          source_file: sheet.href ?? "<inline>",
+          line_number: 0,
+        });
+      }
+    });
+  }
+  return results;
+}
+
+export function captureBaseComputedStyle(el: Element): Record<string, string> {
+  const clone = el.cloneNode(false) as Element;
+  clone.setAttribute("style",
+    "position:fixed!important;top:-99999px!important;left:-99999px!important;" +
+    "visibility:hidden!important;pointer-events:none!important;"
+  );
+  document.body.appendChild(clone);
+  const computed = getComputedStyle(clone);
+  const out: Record<string, string> = {};
+  for (let i = 0; i < computed.length; i++) {
+    const prop = computed.item(i);
+    if (!prop) continue;
+    out[prop] = computed.getPropertyValue(prop).trim();
+  }
+  clone.remove();
   return out;
 }
 

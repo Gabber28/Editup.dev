@@ -3,7 +3,11 @@ export type {
   ElementInfo,
   StylingInfo,
   CSSChange,
+  CSSRuleRef,
+  CSSVariableRef,
   StylingFramework,
+  PseudoState,
+  PseudoStateRule,
 } from "./snapshot.js";
 
 export type {

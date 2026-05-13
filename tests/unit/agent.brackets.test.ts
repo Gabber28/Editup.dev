@@ -19,8 +19,8 @@ describe("FloatingBracketsOverlay — bracket positioning", () => {
     const root = document.getElementById("editup-overlay-root");
     expect(root).not.toBeNull();
     expect(root!.style.pointerEvents).toBe("none");
-    expect(root!.style.width).toBe("0");
-    expect(root!.style.height).toBe("0");
+    expect(root!.style.width).toMatch(/^0(px)?$/);
+    expect(root!.style.height).toMatch(/^0(px)?$/);
   });
 
   it("renders 4 corner brackets for a hovered element", () => {

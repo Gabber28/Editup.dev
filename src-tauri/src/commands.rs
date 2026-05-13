@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use serde::Serialize;
 use tauri::State;
-
 use crate::git;
 use crate::license;
 use crate::proxy::{validate_target_origin, ProxyState, PROXY_PORT};
@@ -62,28 +61,34 @@ pub async fn get_agent_status(state: State<'_, Arc<WsState>>) -> Result<bool, St
 }
 
 #[tauri::command]
+pub async fn get_latest_snapshot(
+    state: State<'_, Arc<WsState>>,
+) -> Result<Option<serde_json::Value>, String> {
+    Ok(state.latest_snapshot.read().await.clone())
+}
+
+#[tauri::command]
 pub async fn start_editing(state: State<'_, Arc<WsState>>) -> Result<(), String> {
+    *state.editing.write().await = true;
     let msg = serde_json::json!({
         "type": "set_editing",
         "payload": { "editing": true }
     });
-    state
-        .to_agent_tx
-        .send(msg.to_string())
-        .map_err(|_| "no agent connected".to_string())?;
+    match state.to_agent_tx.send(msg.to_string()) {
+        Ok(n) => tracing::info!("start_editing broadcast sent to {n} receiver(s)"),
+        Err(e) => tracing::warn!("start_editing broadcast failed: {e}"),
+    }
     Ok(())
 }
 
 #[tauri::command]
 pub async fn stop_editing(state: State<'_, Arc<WsState>>) -> Result<(), String> {
+    *state.editing.write().await = false;
     let msg = serde_json::json!({
         "type": "set_editing",
         "payload": { "editing": false }
     });
-    state
-        .to_agent_tx
-        .send(msg.to_string())
-        .map_err(|_| "no agent connected".to_string())?;
+    let _ = state.to_agent_tx.send(msg.to_string());
     Ok(())
 }
 
@@ -115,12 +120,59 @@ pub async fn reset_overrides(state: State<'_, Arc<WsState>>) -> Result<(), Strin
 }
 
 #[tauri::command]
+pub async fn preview_pseudo_style(
+    property: String,
+    value: String,
+    pseudo: String,
+    state: State<'_, Arc<WsState>>,
+) -> Result<(), String> {
+    let msg = serde_json::json!({
+        "type": "preview_pseudo_style",
+        "payload": { "property": property, "value": value, "pseudo": pseudo }
+    });
+    state
+        .to_agent_tx
+        .send(msg.to_string())
+        .map_err(|_| "no agent connected".to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn request_snapshot(state: State<'_, Arc<WsState>>) -> Result<(), String> {
     let msg = serde_json::json!({ "type": "request_snapshot" });
     state
         .to_agent_tx
         .send(msg.to_string())
         .map_err(|_| "no agent connected".to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_in_browser(url: String) -> Result<(), String> {
+    if !url.starts_with("http://127.0.0.1:") && !url.starts_with("http://localhost:") {
+        return Err("only localhost URLs allowed".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+            .map_err(|e| format!("failed to open browser: {e}"))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("failed to open browser: {e}"))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("failed to open browser: {e}"))?;
+    }
     Ok(())
 }
 

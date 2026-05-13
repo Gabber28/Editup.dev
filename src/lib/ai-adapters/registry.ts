@@ -25,21 +25,25 @@ export class AdapterRegistry {
   }
 
   async detectAvailable(): Promise<DetectionResult> {
-    const available: AIAdapter[] = [];
-    for (const adapter of this.adapters.values()) {
-      try {
+    const adapters = Array.from(this.adapters.values());
+    const results = await Promise.allSettled(
+      adapters.map(async (adapter) => {
         const found = await adapter.detect();
-        if (found) {
-          available.push(adapter);
-          logger.info("adapter detected", {
-            adapter: adapter.name,
-            type: adapter.type,
-          });
-        }
-      } catch (err) {
+        return { adapter, found };
+      })
+    );
+
+    const available: AIAdapter[] = [];
+    for (const result of results) {
+      if (result.status === "fulfilled" && result.value.found) {
+        available.push(result.value.adapter);
+        logger.info("adapter detected", {
+          adapter: result.value.adapter.name,
+          type: result.value.adapter.type,
+        });
+      } else if (result.status === "rejected") {
         logger.warn("adapter detection failed", {
-          adapter: adapter.name,
-          error: err instanceof Error ? err.message : String(err),
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
         });
       }
     }

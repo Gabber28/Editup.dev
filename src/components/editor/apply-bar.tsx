@@ -1,11 +1,12 @@
 import type { JSX } from "react";
 import type { OrchestratorPhase } from "@bridge/orchestrator.js";
+import type { ApplyError } from "@/hooks/useApplyFlow.js";
 
 export interface ApplyBarProps {
   phase: OrchestratorPhase;
   hasChanges: boolean;
   commitHash: string | null;
-  error: string | null;
+  error: ApplyError | null;
   expressMode: boolean;
   editsUsed?: number | undefined;
   editsLimit?: number | undefined;
@@ -58,10 +59,21 @@ export function ApplyBar(props: ApplyBarProps): JSX.Element {
   if (error) {
     return (
       <div className="apply-bar apply-bar--error">
-        <span className="apply-bar__msg">{error}</span>
-        <button type="button" className="apply-bar__btn" onClick={props.onReset}>
-          Dismiss
-        </button>
+        <div className="apply-bar__error-detail">
+          <span className="apply-bar__error-title">{error.title}</span>
+          <span className="apply-bar__error-msg">{error.message}</span>
+          <span className="apply-bar__error-hint">{error.hint}</span>
+        </div>
+        <div className="apply-bar__error-actions">
+          {error.canRetry && (
+            <button type="button" className="apply-bar__btn apply-bar__btn--retry" onClick={props.onApply}>
+              Try again
+            </button>
+          )}
+          <button type="button" className="apply-bar__btn" onClick={props.onReset}>
+            Dismiss
+          </button>
+        </div>
       </div>
     );
   }

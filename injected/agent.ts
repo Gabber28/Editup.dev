@@ -1,11 +1,7 @@
 import { FloatingBracketsOverlay } from "./overlay.js";
-import {
-  captureComputedStyle,
-  captureMatchingRules,
-  captureCSSVariables,
-  detectFramework,
-} from "./style-capture.js";
-import { lookupElementSource } from "./source-map.js";
+import { buildSnapshotPayload } from "./snapshot-builder.js";
+import { PseudoPreviewManager } from "./pseudo-preview.js";
+import { lookupReactFiber } from "./source-map.js";
 
 interface AgentConfig {
   wsUrl: string;
@@ -23,34 +19,71 @@ class EditUpAgent {
   private socket: WebSocket | null = null;
   private selectedEl: Element | null = null;
   private editing = false;
-  private pendingOverrides: Record<string, string> = {};
+  private overridesMap = new Map<Element, Record<string, string>>();
+  private pseudoPreview = new PseudoPreviewManager();
+  private badge: HTMLDivElement | null = null;
 
   constructor(private readonly config: AgentConfig) {}
 
   start(): void {
+    console.log("[EditUp] agent started");
     this.overlay.attach();
     this.installPointerListeners();
+    this.createBadge();
     this.connect();
+  }
+
+  private createBadge(): void {
+    const el = document.createElement("div");
+    el.id = "editup-debug-badge";
+    Object.assign(el.style, {
+      position: "fixed",
+      bottom: "8px",
+      right: "8px",
+      padding: "4px 10px",
+      borderRadius: "6px",
+      fontFamily: "ui-monospace, monospace",
+      fontSize: "11px",
+      color: "#fff",
+      zIndex: "2147483646",
+      pointerEvents: "none",
+      opacity: "0.85",
+    });
+    document.body.appendChild(el);
+    this.badge = el;
+    this.updateBadge("connecting", "#f59e0b");
+  }
+
+  private updateBadge(text: string, bg: string): void {
+    if (!this.badge) return;
+    this.badge.textContent = `EditUp: ${text}`;
+    this.badge.style.background = bg;
   }
 
   private connect(): void {
     const ws = new WebSocket(this.config.wsUrl);
     this.socket = ws;
     ws.onopen = (): void => {
+      console.log("[EditUp] ws connected, sending hello");
+      this.updateBadge("connected (waiting)", "#3b82f6");
       this.send({ type: "hello", token: this.config.sessionToken });
     };
     ws.onmessage = (ev): void => {
       try {
         const data = JSON.parse(String(ev.data)) as AgentMessage;
+        console.log("[EditUp] ws message:", data.type, data.payload);
         this.handleMessage(data);
       } catch {
         // ignore malformed
       }
     };
     ws.onclose = (): void => {
+      console.log("[EditUp] ws closed, reconnecting in 1s");
+      this.updateBadge("disconnected", "#ef4444");
       setTimeout(() => this.connect(), 1000);
     };
-    ws.onerror = (): void => {
+    ws.onerror = (err): void => {
+      console.log("[EditUp] ws error:", err);
       ws.close();
     };
   }
@@ -68,6 +101,13 @@ class EditUpAgent {
         this.editing = Boolean(
           (msg.payload as { editing?: boolean } | undefined)?.editing
         );
+        console.log("[EditUp] set_editing =>", this.editing);
+        this.updateBadge(
+          this.editing ? "editing ON" : "editing OFF",
+          this.editing ? "#22c55e" : "#f59e0b"
+        );
+        if (this.editing) this.restoreSelection();
+        if (!this.editing) sessionStorage.removeItem("__editup_selected__");
         break;
       case "preview_style": {
         const p = msg.payload as
@@ -75,7 +115,21 @@ class EditUpAgent {
           | undefined;
         if (p && this.selectedEl instanceof HTMLElement) {
           this.selectedEl.style.setProperty(p.property, p.value);
-          this.pendingOverrides[p.property] = p.value;
+          let elOverrides = this.overridesMap.get(this.selectedEl);
+          if (!elOverrides) {
+            elOverrides = {};
+            this.overridesMap.set(this.selectedEl, elOverrides);
+          }
+          elOverrides[p.property] = p.value;
+        }
+        break;
+      }
+      case "preview_pseudo_style": {
+        const pp = msg.payload as
+          | { property: string; value: string; pseudo: string }
+          | undefined;
+        if (pp && this.selectedEl) {
+          this.pseudoPreview.preview(this.selectedEl, pp.pseudo, pp.property, pp.value);
         }
         break;
       }
@@ -110,12 +164,23 @@ class EditUpAgent {
   }
 
   private onClick(ev: MouseEvent): void {
+    console.log("[EditUp] click, editing=", this.editing);
     if (!this.editing) return;
+    this.updateBadge("click detected...", "#3b82f6");
     const target = this.elementFromPoint(ev.clientX, ev.clientY);
-    if (!target) return;
+    console.log("[EditUp] click target:", target?.tagName, target?.className);
+    if (!target) {
+      this.updateBadge("no target found", "#ef4444");
+      return;
+    }
     ev.preventDefault();
     ev.stopPropagation();
-    this.selectElement(target);
+    try {
+      this.selectElement(target);
+    } catch (err) {
+      console.error("[EditUp] selectElement error:", err);
+      this.updateBadge(`error: ${err}`, "#ef4444");
+    }
   }
 
   private elementFromPoint(x: number, y: number): Element | null {
@@ -128,66 +193,73 @@ class EditUpAgent {
   }
 
   private selectElement(el: Element): void {
-    this.resetOverrides();
     this.selectedEl = el;
-    const lookup = lookupElementSource(el);
+    const lookup = lookupReactFiber(el);
     const label =
       lookup.componentName ?? `${el.tagName.toLowerCase()}${labelOf(el)}`;
     this.overlay.setSelected(el, label);
+    sessionStorage.setItem("__editup_selected__", this.buildSelector(el));
     this.sendSnapshot();
+  }
+
+  private restoreSelection(): void {
+    if (this.selectedEl) return;
+    const saved = sessionStorage.getItem("__editup_selected__");
+    if (!saved) return;
+    const el = document.querySelector(saved);
+    if (el) this.selectElement(el);
+  }
+
+  private buildSelector(el: Element): string {
+    if (el.id) return `#${el.id}`;
+    const parts: string[] = [];
+    let current: Element | null = el;
+    while (current && current !== document.documentElement) {
+      let seg = current.tagName.toLowerCase();
+      if (current.id) {
+        parts.unshift(`#${current.id}`);
+        break;
+      }
+      const parent = current.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children).filter(
+          (c) => c.tagName === current!.tagName
+        );
+        if (siblings.length > 1) {
+          const idx = siblings.indexOf(current) + 1;
+          seg += `:nth-of-type(${idx})`;
+        }
+      }
+      parts.unshift(seg);
+      current = parent;
+    }
+    return parts.join(" > ");
   }
 
   private sendSnapshot(): void {
     if (!this.selectedEl) return;
     const el = this.selectedEl;
-    const computed = captureComputedStyle(el);
-    const rules = captureMatchingRules(el);
-    const cssVars = captureCSSVariables(el);
-    const framework = detectFramework(el);
-    const source = lookupElementSource(el);
-
-    const classToRule: Record<
-      string,
-      { source_file: string; rule_text: string; line_number: number }
-    > = {};
-    for (const cls of Array.from(el.classList)) {
-      const matched = rules.find((r) => r.selector.includes(`.${cls}`));
-      if (matched) {
-        classToRule[cls] = {
-          source_file: matched.source_file,
-          rule_text: matched.rule_text,
-          line_number: matched.line_number,
-        };
-      }
-    }
-
-    this.send({
-      type: "snapshot",
-      payload: {
-        element: {
-          tag: el.tagName.toLowerCase(),
-          id: el.id || undefined,
-          classes: Array.from(el.classList),
-          component_name: source.componentName,
-          source_file: source.source?.file,
-          source_line: source.source?.line,
-        },
-        styling: {
-          framework,
-          class_to_rule_map: classToRule,
-          active_css_variables: cssVars,
-        },
-        computed_style: computed,
-      },
-    });
+    const tag = el.tagName.toLowerCase();
+    this.updateBadge(`capturing ${tag}...`, "#a855f7");
+    const payload = buildSnapshotPayload(el);
+    const wsOpen = this.socket?.readyState === WebSocket.OPEN;
+    this.send({ type: "snapshot", payload });
+    this.updateBadge(
+      wsOpen ? `sent: <${tag}>` : "WS closed, snapshot lost!",
+      wsOpen ? "#22c55e" : "#ef4444"
+    );
   }
 
   private resetOverrides(): void {
-    if (!(this.selectedEl instanceof HTMLElement)) return;
-    for (const prop of Object.keys(this.pendingOverrides)) {
-      this.selectedEl.style.removeProperty(prop);
+    for (const [el, overrides] of this.overridesMap) {
+      if (el instanceof HTMLElement) {
+        for (const prop of Object.keys(overrides)) {
+          el.style.removeProperty(prop);
+        }
+      }
     }
-    this.pendingOverrides = {};
+    this.overridesMap.clear();
+    this.pseudoPreview.resetAll();
   }
 }
 

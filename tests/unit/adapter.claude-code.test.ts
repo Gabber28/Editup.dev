@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { makeSnapshot, makePlan, makeContext } from "../helpers/fixtures.js";
 
-const spawnSafeMock = vi.fn();
-const detectCliViaTauriMock = vi.fn();
+const { spawnSafeMock, detectCliViaTauriMock } = vi.hoisted(() => ({
+  spawnSafeMock: vi.fn(),
+  detectCliViaTauriMock: vi.fn(),
+}));
 
 vi.mock("@/lib/ai-adapters/spawn-safe.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/ai-adapters/spawn-safe.js")>();

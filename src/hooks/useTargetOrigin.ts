@@ -5,7 +5,7 @@ export interface TargetOriginState {
   origin: string | null;
   loading: boolean;
   error: string | null;
-  connect: (url: string) => Promise<void>;
+  connect: (url: string, proxyPort: number) => Promise<void>;
 }
 
 export function useTargetOrigin(): TargetOriginState {
@@ -13,12 +13,15 @@ export function useTargetOrigin(): TargetOriginState {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const connect = useCallback(async (url: string) => {
+  const connect = useCallback(async (url: string, proxyPort: number) => {
     setLoading(true);
     setError(null);
     try {
       await invoke("set_target_origin", { origin: url });
       setOrigin(url);
+      await invoke("open_in_browser", {
+        url: `http://localhost:${proxyPort}`,
+      });
     } catch (err: unknown) {
       setError(String(err));
     } finally {

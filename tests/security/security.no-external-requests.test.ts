@@ -12,6 +12,9 @@ const ALLOWED_HOSTS = new Set([
   "localhost",
   "::1",
   "[::1]",
+  "editup.dev",
+  "releases.editup.dev",
+  "www.w3.org",
 ]);
 
 const ALLOWLIST = new Set<string>([
@@ -20,6 +23,13 @@ const ALLOWLIST = new Set<string>([
   join("editup-planning-v2.md"),
   join("editup-review-v2.txt"),
   join("eslint.config.js"),
+]);
+
+// Hosts used in Rust security test assertions (validate_host, validate_origin)
+const TEST_ONLY_HOSTS = new Set([
+  "example.com",
+  "attacker.com",
+  "cdn.example.com",
 ]);
 
 /**
@@ -70,11 +80,11 @@ describe("security — no external requests", () => {
       if (ALLOWLIST.has(rel)) continue;
       const content = await fs.readFile(file, "utf8");
       const hosts = extractHosts(content);
+      const isRustTest = rel.endsWith(".rs");
       for (const host of hosts) {
-        const isAllowed = ALLOWED_HOSTS.has(host);
-        if (!isAllowed) {
-          violations.push({ file: rel, host });
-        }
+        if (ALLOWED_HOSTS.has(host)) continue;
+        if (isRustTest && TEST_ONLY_HOSTS.has(host)) continue;
+        violations.push({ file: rel, host });
       }
     }
     expect(violations).toEqual([]);

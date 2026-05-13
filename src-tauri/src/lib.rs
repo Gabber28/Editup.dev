@@ -11,7 +11,7 @@ pub mod ws;
 
 use std::sync::Arc;
 
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 use tokio::sync::mpsc;
 
 use crate::proxy::ProxyState;
@@ -49,6 +49,7 @@ pub fn run() {
                 }
             });
 
+            let ws_for_forwarder = ws_state.clone();
             let ws = ws_state;
             tauri::async_runtime::spawn(async move {
                 if let Err(err) = ws::start_ws_server(ws).await {
@@ -56,7 +57,7 @@ pub fn run() {
                 }
             });
 
-            spawn_event_forwarder(from_agent_rx, handle);
+            spawn_event_forwarder(from_agent_rx, handle, ws_for_forwarder);
 
             Ok(())
         })
@@ -67,9 +68,11 @@ pub fn run() {
             commands::set_project_root,
             commands::get_project_root,
             commands::get_agent_status,
+            commands::get_latest_snapshot,
             commands::start_editing,
             commands::stop_editing,
             commands::preview_style,
+            commands::preview_pseudo_style,
             commands::reset_overrides,
             commands::request_snapshot,
             commands::git_status,
@@ -81,6 +84,7 @@ pub fn run() {
             commands::get_license_status,
             commands::increment_edit_count,
             commands::get_rate_limit_state,
+            commands::open_in_browser,
             cli::spawn_cli,
             cli::detect_cli,
             history::write_history_entry,
@@ -96,12 +100,22 @@ pub fn run() {
 fn spawn_event_forwarder(
     mut rx: mpsc::Receiver<ws::AgentMessage>,
     handle: tauri::AppHandle,
+    ws_state: Arc<WsState>,
 ) {
     tauri::async_runtime::spawn(async move {
         while let Some(msg) = rx.recv().await {
             let event = format!("agent_{}", msg.msg_type);
+            tracing::info!(
+                "forwarding agent message: type={}, event={}, has_payload={}",
+                msg.msg_type, event, msg.payload.is_some()
+            );
+            if msg.msg_type == "snapshot" {
+                if let Some(ref payload) = msg.payload {
+                    *ws_state.latest_snapshot.write().await = Some(payload.clone());
+                }
+            }
             if let Err(err) = handle.emit(&event, &msg.payload) {
-                tracing::debug!("event emit failed: {err}");
+                tracing::warn!("event emit failed for {event}: {err}");
             }
         }
     });

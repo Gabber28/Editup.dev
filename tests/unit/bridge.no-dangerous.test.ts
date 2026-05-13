@@ -51,12 +51,15 @@ describe("bridge — no --dangerously-skip-permissions in source", () => {
     expect(violations).toEqual([]);
   });
 
-  it("src/lib/ai-adapters/ contains no reference to the flag", async () => {
+  it("src/lib/ai-adapters/ contains no reference to the flag (except enforcement)", async () => {
+    const ENFORCEMENT_FILES = new Set(["spawn-safe.ts"]);
     const files = await listTsFiles(SCAN_DIRS[1]!);
     expect(files.length).toBeGreaterThan(0);
 
     const violations: string[] = [];
     for (const file of files) {
+      const basename = file.split(sep).pop() ?? "";
+      if (ENFORCEMENT_FILES.has(basename)) continue;
       const content = await fs.readFile(file, "utf8");
       if (content.includes(FORBIDDEN)) {
         const rel = file.replace(`${PROJECT_ROOT}${sep}`, "");

@@ -42,8 +42,11 @@ describe("prompt — framework mention for every value", () => {
     const prompt = buildPlanPrompt({ snapshot, projectRoot: "/proj" });
 
     const fwIdx = prompt.indexOf("<framework>");
-    const vcStart = prompt.indexOf("<visual_changes>");
-    expect(fwIdx).toBeLessThan(vcStart);
+    const vcEnd = prompt.indexOf("</visual_changes>");
+    expect(fwIdx).toBeLessThan(vcEnd);
+    expect(fwIdx).toBeGreaterThan(-1);
+    const fwBefore = prompt.slice(0, prompt.indexOf("</visual_changes>"));
+    expect(fwBefore).toContain("<framework>");
   });
 
   it("renders class_rules when class_to_rule_map is populated", () => {

@@ -3,7 +3,7 @@ import {
   captureComputedStyle,
   detectFramework,
 } from "@injected/style-capture.js";
-import { lookupElementSource } from "@injected/source-map.js";
+import { lookupReactFiber } from "@injected/source-map.js";
 
 describe("element info extraction", () => {
   beforeEach(() => {
@@ -93,9 +93,10 @@ describe("component name extraction", () => {
         return: null,
       },
       configurable: true,
+      enumerable: true,
     });
 
-    const result = lookupElementSource(el);
+    const result = lookupReactFiber(el);
     expect(result.componentName).toBe("MyButton");
     expect(result.source?.file).toBe("/src/MyButton.tsx");
     expect(result.source?.line).toBe(42);
@@ -103,7 +104,7 @@ describe("component name extraction", () => {
 
   it("returns empty lookup when no fiber is present", () => {
     const el = document.createElement("span");
-    const result = lookupElementSource(el);
+    const result = lookupReactFiber(el);
     expect(result.componentName).toBeUndefined();
     expect(result.source).toBeUndefined();
   });
@@ -119,9 +120,10 @@ describe("component name extraction", () => {
         return: null,
       },
       configurable: true,
+      enumerable: true,
     });
 
-    const result = lookupElementSource(el);
+    const result = lookupReactFiber(el);
     expect(result.componentName).toBe("PrimaryButton");
   });
 });

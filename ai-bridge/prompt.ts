@@ -7,8 +7,9 @@ Your job: read the project, understand the architecture (design system, shared c
 
 Respect priorities:
 1. <visual_changes> are EXACT CSS values. Apply them faithfully — do not reinterpret.
-2. <text_instructions> are free-form requests. Interpret them in the context of the project's conventions.
-3. If <visual_changes> and <text_instructions> conflict, visual_changes win.
+2. Changes with a "state" attribute (e.g. state=":hover") must be applied to the corresponding CSS pseudo-class selector, not to the default rule.
+3. <text_instructions> are free-form requests. Interpret them in the context of the project's conventions.
+4. If <visual_changes> and <text_instructions> conflict, visual_changes win.
 
 Return ONLY a JSON object matching this shape:
 {
@@ -28,6 +29,7 @@ Rules:
 - Edit ONLY the files listed in <approved_plan>. If you discover you must touch another file, do so but record the reason.
 - Preserve formatting and import order unless the change requires otherwise.
 - For visual changes, apply EXACT values from <visual_changes>.
+- Changes with a "state" attribute must be applied to the matching CSS pseudo-class selector (e.g. state=":hover" → .selector:hover { ... }).
 - For text instructions, apply them respecting the project's conventions.
 - After all edits, return a one-line summary of what you changed.`;
 
@@ -61,7 +63,8 @@ function renderVisualChanges(snapshot: EnrichedSnapshot): string {
     const before = escapeXml(c.before_computed);
     const after = escapeXml(c.after_computed);
     const prop = escapeXml(c.property);
-    return `  <change property="${prop}" from="${before}" to="${after}" />`;
+    const stateAttr = c.pseudo_state ? ` state="${escapeXml(c.pseudo_state)}"` : "";
+    return `  <change property="${prop}" from="${before}" to="${after}"${stateAttr} />`;
   });
   return `<visual_changes>\n${lines.join("\n")}\n</visual_changes>`;
 }

@@ -33,7 +33,7 @@ export function lookupReactFiber(el: Element): ElementSourceLookup {
   let source: SourceLocation | undefined;
 
   while (current) {
-    if (typeof current.type === "function" || typeof current.type === "object") {
+    if (typeof current.type === "function" || (typeof current.type === "object" && current.type !== null)) {
       const type = current.type as { displayName?: string; name?: string };
       if (type.displayName) {
         componentName = componentName ?? type.displayName;

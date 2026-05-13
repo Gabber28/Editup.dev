@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::process::Command;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use tokio::process::Command;
 
 #[derive(Debug, Deserialize)]
 pub struct SpawnCliInput {
@@ -21,26 +21,46 @@ pub struct SpawnCliResult {
 #[tauri::command]
 pub async fn spawn_cli(input: SpawnCliInput) -> Result<SpawnCliResult, String> {
     let start = Instant::now();
-    let output = Command::new(&input.cmd)
+    let timeout = Duration::from_millis(input.timeout_ms.max(1000));
+
+    let child = Command::new(&input.cmd)
         .args(&input.args)
         .current_dir(&input.cwd)
-        .output()
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|e| format!("spawn '{}' failed: {e}", input.cmd))?;
 
-    Ok(SpawnCliResult {
-        exit_code: output.status.code(),
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        duration_ms: start.elapsed().as_millis() as u64,
-    })
+    match tokio::time::timeout(timeout, child.wait_with_output()).await {
+        Ok(Ok(output)) => Ok(SpawnCliResult {
+            exit_code: output.status.code(),
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            duration_ms: start.elapsed().as_millis() as u64,
+        }),
+        Ok(Err(e)) => Err(format!("'{}' I/O error: {e}", input.cmd)),
+        Err(_) => Err(format!(
+            "'{}' timed out after {}ms",
+            input.cmd, input.timeout_ms
+        )),
+    }
 }
 
 #[tauri::command]
 pub async fn detect_cli(name: String) -> Result<bool, String> {
     let cmd = if cfg!(windows) { "where" } else { "which" };
-    let result = Command::new(cmd)
+    let timeout = Duration::from_secs(5);
+
+    let child = Command::new(cmd)
         .arg(&name)
-        .output()
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
         .map_err(|e| format!("detect '{name}' failed: {e}"))?;
-    Ok(result.status.success())
+
+    match tokio::time::timeout(timeout, child.wait_with_output()).await {
+        Ok(Ok(output)) => Ok(output.status.success()),
+        Ok(Err(e)) => Err(format!("detect '{name}' I/O error: {e}")),
+        Err(_) => Ok(false),
+    }
 }

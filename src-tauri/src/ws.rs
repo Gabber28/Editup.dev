@@ -23,6 +23,8 @@ pub struct WsState {
     pub to_agent_tx: broadcast::Sender<String>,
     pub from_agent_tx: mpsc::Sender<AgentMessage>,
     pub connected: Arc<RwLock<bool>>,
+    pub editing: Arc<RwLock<bool>>,
+    pub latest_snapshot: Arc<RwLock<Option<serde_json::Value>>>,
     session_token: SessionToken,
 }
 
@@ -33,6 +35,8 @@ impl WsState {
             to_agent_tx,
             from_agent_tx,
             connected: Arc::new(RwLock::new(false)),
+            editing: Arc::new(RwLock::new(false)),
+            latest_snapshot: Arc::new(RwLock::new(None)),
             session_token,
         }
     }
@@ -99,6 +103,14 @@ async fn handle_connection<S>(
     let mut to_agent_rx = state.to_agent_tx.subscribe();
     let from_agent_tx = state.from_agent_tx.clone();
 
+    let editing = *state.editing.read().await;
+    let msg = serde_json::json!({"type": "set_editing", "payload": {"editing": editing}});
+    if sink.send(Message::Text(msg.to_string())).await.is_err() {
+        tracing::warn!("failed to send initial editing state to agent");
+        return;
+    }
+    tracing::info!("sent editing={editing} to newly connected agent");
+
     loop {
         tokio::select! {
             msg = stream.next() => {
@@ -123,7 +135,10 @@ async fn handle_connection<S>(
                             break;
                         }
                     }
-                    Err(_) => break,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!("agent ws receiver lagged, skipped {n} messages");
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }
         }

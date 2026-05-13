@@ -6,6 +6,7 @@ export interface EditorShellProps {
   layers: ReactNode;
   identity: ReactNode;
   tabs: ReactNode;
+  stateSelector?: ReactNode;
   panel: ReactNode;
   codeBox: ReactNode;
   progress: ReactNode;
@@ -26,6 +27,7 @@ export function EditorShell(props: EditorShellProps): JSX.Element {
         <main className="editor-main">
           {props.identity}
           {props.tabs}
+          {props.stateSelector}
           <div className="panel-content">{props.panel}</div>
           {mode !== "narrow" && props.codeBox}
           {props.progress}
