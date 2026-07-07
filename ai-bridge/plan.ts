@@ -26,6 +26,10 @@ export async function runPlan(
           adapter: adapter.name,
           attempt,
           issue_count: validated.issues.length,
+          fields: validated.issues
+            .map((i) => i.path.join("."))
+            .filter(Boolean)
+            .slice(0, 20),
         });
         lastError = new PlanFailedError(
           `Plan from ${adapter.name} failed schema validation`,
