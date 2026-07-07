@@ -156,15 +156,32 @@ pub async fn request_snapshot(state: State<'_, Arc<WsState>>) -> Result<(), Stri
     Ok(())
 }
 
+/// Validates that a URL is safe to hand to the OS opener: http scheme, loopback
+/// host, and free of whitespace/control characters that a shell could abuse.
+fn validate_open_url(url: &str) -> Result<(), String> {
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err("url contains illegal characters".into());
+    }
+    let parsed = url::Url::parse(url).map_err(|e| format!("invalid url: {e}"))?;
+    if parsed.scheme() != "http" {
+        return Err("only http URLs allowed".into());
+    }
+    match parsed.host_str() {
+        Some("127.0.0.1") | Some("localhost") => Ok(()),
+        _ => Err("only localhost URLs allowed".into()),
+    }
+}
+
 #[tauri::command]
 pub fn open_in_browser(url: String) -> Result<(), String> {
-    if !url.starts_with("http://127.0.0.1:") && !url.starts_with("http://localhost:") {
-        return Err("only localhost URLs allowed".into());
-    }
+    validate_open_url(&url)?;
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", &url])
+        // Avoid `cmd /C start` — cmd re-parses arguments and treats `&`, `|`,
+        // etc. as command separators. rundll32 receives the URL as a single
+        // native arg with no shell metacharacter interpretation.
+        std::process::Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", &url])
             .spawn()
             .map_err(|e| format!("failed to open browser: {e}"))?;
     }

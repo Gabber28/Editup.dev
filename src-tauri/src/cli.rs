@@ -29,6 +29,62 @@ pub struct SpawnCliInput {
     pub timeout_ms: u64,
 }
 
+/// Binaries the app is ever allowed to spawn. Defense-in-depth: the TS layer
+/// (`spawn-safe.ts`) enforces the same rules, but the backend must not trust
+/// the renderer.
+const ALLOWED_COMMANDS: &[&str] = &["claude", "aider", "git", "where", "which"];
+
+/// Flags that must never reach an AI CLI (mirrors `FORBIDDEN_FLAGS` in TS).
+const FORBIDDEN_FLAGS: &[&str] = &[
+    "--dangerously-skip-permissions",
+    "--skip-permissions",
+];
+
+/// Tools that must never appear in an `--allowedTools` value.
+const FORBIDDEN_TOOLS: &[&str] = &["Write", "Bash", "WebFetch"];
+
+/// Validates a spawn request against the same invariants enforced in TS.
+/// Returns an error string suitable for surfacing to the caller.
+fn assert_spawn_safe(input: &SpawnCliInput) -> Result<(), String> {
+    let base = std::path::Path::new(&input.cmd)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(&input.cmd);
+    if !ALLOWED_COMMANDS.contains(&base) {
+        return Err(format!("command not allowed: {}", input.cmd));
+    }
+
+    for arg in &input.args {
+        let flag = arg.split('=').next().unwrap_or(arg);
+        if FORBIDDEN_FLAGS.iter().any(|f| flag == *f || arg.contains(*f)) {
+            return Err(format!("forbidden flag detected: {arg}"));
+        }
+    }
+
+    // If an --allowedTools value is present, ensure it contains no forbidden tool.
+    let mut i = 0;
+    while i < input.args.len() {
+        let arg = &input.args[i];
+        let flag = arg.split('=').next().unwrap_or(arg);
+        if flag == "--allowedTools" || flag == "--allowed-tools" {
+            let value = if let Some((_, v)) = arg.split_once('=') {
+                v.to_string()
+            } else {
+                i += 1;
+                input.args.get(i).cloned().unwrap_or_default()
+            };
+            for tool in value.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()) {
+                if FORBIDDEN_TOOLS.contains(&tool) {
+                    return Err(format!("forbidden tool in allowedTools: {tool}"));
+                }
+            }
+        }
+        i += 1;
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Serialize)]
 pub struct SpawnCliResult {
     pub exit_code: Option<i32>,
@@ -39,6 +95,8 @@ pub struct SpawnCliResult {
 
 #[tauri::command]
 pub async fn spawn_cli(input: SpawnCliInput) -> Result<SpawnCliResult, String> {
+    assert_spawn_safe(&input)?;
+
     let start = Instant::now();
     let timeout = Duration::from_millis(input.timeout_ms.max(1000));
 

@@ -58,7 +58,26 @@ pub async fn start_ws_server(
         }
         let state = state.clone();
         tokio::spawn(async move {
-            let ws = match tokio_tungstenite::accept_async(stream).await {
+            let callback = |req: &tokio_tungstenite::tungstenite::handshake::server::Request,
+                            resp: tokio_tungstenite::tungstenite::handshake::server::Response| {
+                let header = |name: &str| {
+                    req.headers()
+                        .get(name)
+                        .and_then(|v| v.to_str().ok())
+                };
+                if validate_host_header(header("host")).is_err()
+                    || validate_origin(header("origin")).is_err()
+                {
+                    tracing::warn!("ws: rejected handshake (invalid host/origin)");
+                    let err = tokio_tungstenite::tungstenite::http::Response::builder()
+                        .status(tokio_tungstenite::tungstenite::http::StatusCode::FORBIDDEN)
+                        .body(Some("invalid host or origin".to_string()))
+                        .expect("build forbidden response");
+                    return Err(err);
+                }
+                Ok(resp)
+            };
+            let ws = match tokio_tungstenite::accept_hdr_async(stream, callback).await {
                 Ok(ws) => ws,
                 Err(err) => {
                     tracing::warn!("ws handshake failed: {err}");
