@@ -65,14 +65,16 @@ pub fn auto_commit(
 ) -> Result<GitCommitResult, String> {
     let root = Path::new(project_root);
 
+    // Never `git add -A`: that would stage the user's unrelated changes under an
+    // `editup:` commit that the 1-click revert could later undo. Require the
+    // explicit file list from the approved EditPlan.
     if files.is_empty() {
-        run_git(root, &["add", "-A"])?;
-    } else {
-        let mut args = vec!["add", "--"];
-        let file_refs: Vec<&str> = files.iter().map(|s| s.as_str()).collect();
-        args.extend(file_refs);
-        run_git(root, &args)?;
+        return Err("refusing to commit: no files specified".into());
     }
+    let mut args = vec!["add", "--"];
+    let file_refs: Vec<&str> = files.iter().map(|s| s.as_str()).collect();
+    args.extend(file_refs);
+    run_git(root, &args)?;
 
     run_git(root, &["commit", "-m", message])?;
 
@@ -88,6 +90,18 @@ pub fn auto_commit(
 
 pub fn revert_last(project_root: &str) -> Result<String, String> {
     let root = Path::new(project_root);
+
+    // `git revert` aborts on a dirty tree or a merge HEAD; check first so the
+    // user gets a clear message instead of a raw git failure.
+    let dirty = !run_git(root, &["status", "--porcelain"])?.trim().is_empty();
+    if dirty {
+        return Err("working tree has uncommitted changes; commit or stash before reverting".into());
+    }
+    let parents = run_git(root, &["rev-list", "--parents", "-n", "1", "HEAD"])?;
+    if parents.split_whitespace().count() > 2 {
+        return Err("HEAD is a merge commit; revert it manually".into());
+    }
+
     let hash = run_git(root, &["rev-parse", "--short", "HEAD"])?
         .trim()
         .to_string();

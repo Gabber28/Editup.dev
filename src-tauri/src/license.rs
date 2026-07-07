@@ -169,6 +169,14 @@ pub async fn check_and_reverify() -> Result<LicenseStatus, String> {
     let plain = decrypt(&encoded)?;
     let stored: StoredLicense =
         serde_json::from_slice(&plain).map_err(|e| format!("deserialize: {e}"))?;
+    // Avoid hitting Lemon Squeezy on every check: only re-verify online once the
+    // last verification is older than a day. Within that window the cached
+    // status (still inside grace) is authoritative.
+    if let Ok(ts) = stored.last_verified.parse::<DateTime<Utc>>() {
+        if Utc::now().signed_duration_since(ts).num_hours() < 24 {
+            return Ok(status);
+        }
+    }
     match verify_online(&stored.key).await {
         Ok(fresh) => { save_key(&stored.key).await?; Ok(fresh) }
         Err(_) => Ok(status),

@@ -26,7 +26,6 @@ class EditUpAgent {
   constructor(private readonly config: AgentConfig) {}
 
   start(): void {
-    console.log("[EditUp] agent started");
     this.overlay.attach();
     this.installPointerListeners();
     this.createBadge();
@@ -64,26 +63,22 @@ class EditUpAgent {
     const ws = new WebSocket(this.config.wsUrl);
     this.socket = ws;
     ws.onopen = (): void => {
-      console.log("[EditUp] ws connected, sending hello");
       this.updateBadge("connected (waiting)", "#3b82f6");
       this.send({ type: "hello", token: this.config.sessionToken });
     };
     ws.onmessage = (ev): void => {
       try {
         const data = JSON.parse(String(ev.data)) as AgentMessage;
-        console.log("[EditUp] ws message:", data.type, data.payload);
         this.handleMessage(data);
       } catch {
         // ignore malformed
       }
     };
     ws.onclose = (): void => {
-      console.log("[EditUp] ws closed, reconnecting in 1s");
       this.updateBadge("disconnected", "#ef4444");
       setTimeout(() => this.connect(), 1000);
     };
-    ws.onerror = (err): void => {
-      console.log("[EditUp] ws error:", err);
+    ws.onerror = (): void => {
       ws.close();
     };
   }
@@ -101,7 +96,6 @@ class EditUpAgent {
         this.editing = Boolean(
           (msg.payload as { editing?: boolean } | undefined)?.editing
         );
-        console.log("[EditUp] set_editing =>", this.editing);
         this.updateBadge(
           this.editing ? "editing ON" : "editing OFF",
           this.editing ? "#22c55e" : "#f59e0b"
@@ -164,11 +158,9 @@ class EditUpAgent {
   }
 
   private onClick(ev: MouseEvent): void {
-    console.log("[EditUp] click, editing=", this.editing);
     if (!this.editing) return;
     this.updateBadge("click detected...", "#3b82f6");
     const target = this.elementFromPoint(ev.clientX, ev.clientY);
-    console.log("[EditUp] click target:", target?.tagName, target?.className);
     if (!target) {
       this.updateBadge("no target found", "#ef4444");
       return;
@@ -178,7 +170,6 @@ class EditUpAgent {
     try {
       this.selectElement(target);
     } catch (err) {
-      console.error("[EditUp] selectElement error:", err);
       this.updateBadge(`error: ${err}`, "#ef4444");
     }
   }

@@ -208,8 +208,10 @@ async fn forward_request(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let injected = if content_type.starts_with("text/html") {
-        inject_agent_script(&bytes, &state.session_token)
+    let is_html = content_type.starts_with("text/html");
+    let nonce = uuid::Uuid::new_v4().simple().to_string();
+    let injected = if is_html {
+        inject_agent_script(&bytes, &state.session_token, &nonce)
     } else {
         bytes.to_vec()
     };
@@ -224,7 +226,7 @@ async fn forward_request(
         }
         if name.as_str().eq_ignore_ascii_case("content-security-policy") {
             if let Ok(val_str) = value.to_str() {
-                let patched = patch_csp(val_str);
+                let patched = patch_csp(val_str, &nonce);
                 if let Ok(hv) = HeaderValue::from_str(&patched) {
                     resp_builder = resp_builder.header(name.clone(), hv);
                 }
@@ -245,13 +247,17 @@ async fn forward_request(
         }))
 }
 
-fn inject_agent_script(html: &[u8], token: &SessionToken) -> Vec<u8> {
+fn inject_agent_script(html: &[u8], token: &SessionToken, nonce: &str) -> Vec<u8> {
     let html_str = String::from_utf8_lossy(html);
+    // Token travels only via the `hello` WS message, never in the URL (query
+    // strings leak into logs/history). The inline config script carries a nonce
+    // so the CSP can allow it without weakening the page with 'unsafe-inline'.
     let snippet = format!(
-        r#"<script>window.__EDITUP_CONFIG__={{wsUrl:"ws://127.0.0.1:{}?token={}",sessionToken:"{}"}};</script><script src="/__editup__/agent.js" defer></script>"#,
+        r#"<script nonce="{}">window.__EDITUP_CONFIG__={{wsUrl:"ws://127.0.0.1:{}",sessionToken:"{}"}};</script><script nonce="{}" src="/__editup__/agent.js" defer></script>"#,
+        nonce,
         WS_PORT,
         token.as_str(),
-        token.as_str()
+        nonce
     );
 
     let lower = html_str.to_lowercase();
@@ -408,12 +414,13 @@ async fn handle_ws_tunnel(
         .unwrap())
 }
 
-fn patch_csp(csp: &str) -> String {
+fn patch_csp(csp: &str, nonce: &str) -> String {
     let editup_sources = format!(
         "ws://127.0.0.1:{} http://127.0.0.1:{}",
         WS_PORT, PROXY_PORT
     );
-    let mut result = String::with_capacity(csp.len() + editup_sources.len() * 2 + 40);
+    let nonce_src = format!("'nonce-{nonce}'");
+    let mut result = String::with_capacity(csp.len() + editup_sources.len() * 2 + 60);
     let mut patched_connect = false;
     let mut patched_script = false;
     for directive in csp.split(';') {
@@ -428,7 +435,8 @@ fn patch_csp(csp: &str) -> String {
             patched_connect = true;
         } else if trimmed.starts_with("script-src") {
             result.push_str(trimmed);
-            result.push_str(" 'unsafe-inline'");
+            result.push(' ');
+            result.push_str(&nonce_src);
             patched_script = true;
         } else {
             result.push_str(trimmed);
@@ -439,7 +447,8 @@ fn patch_csp(csp: &str) -> String {
         result.push_str(&editup_sources);
     }
     if !patched_script {
-        result.push_str("; script-src 'self' 'unsafe-inline'");
+        result.push_str("; script-src 'self' ");
+        result.push_str(&nonce_src);
     }
     result
 }

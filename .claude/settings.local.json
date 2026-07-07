@@ -62,7 +62,10 @@
       "PowerShell(Get-CimInstance *)",
       "PowerShell(Stop-Process *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(cargo test *)",
+      "Bash(pnpm vitest *)",
+      "Bash(git stash *)"
     ]
   }
 }

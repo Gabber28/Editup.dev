@@ -18,6 +18,7 @@ const FORBIDDEN_PATTERNS: Array<{ pattern: RegExp; message: string }> = [
 const ALLOWED_REFERENCES = new Set<string>([
   // Files where the literal appears intentionally as a forbidden token check
   join("src", "lib", "ai-adapters", "spawn-safe.ts"),
+  join("src-tauri", "src", "cli.rs"),
   join("tests", "security", "spawn-safe.test.ts"),
   join("tests", "security", "no-source-leak.test.ts"),
   join("tests", "security", "no-bind-zero.test.ts"),
