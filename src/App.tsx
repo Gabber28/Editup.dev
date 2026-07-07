@@ -42,7 +42,7 @@ export function App(): JSX.Element {
   const license = useLicense();
   const updater = useUpdater();
   const target = useTargetOrigin();
-  const agent = useAgentConnection();
+  const agent = useAgentConnection(!license.loading);
   const flow = useApplyFlow(session?.token ?? "", license.canApply());
 
   const [mode, setMode] = useState<AppMode>("setup");
@@ -52,6 +52,17 @@ export function App(): JSX.Element {
   const [inputKey, setInputKey] = useState(0);
   const projectRootRef = useRef("");
   const textRef = useRef("");
+
+  useEffect(() => {
+    if (session && !license.loading) {
+      invoke("show_window").catch(() => {});
+    }
+  }, [session, license.loading]);
+
+  useEffect(() => {
+    const fallback = setTimeout(() => invoke("show_window").catch(() => {}), 3000);
+    return () => clearTimeout(fallback);
+  }, []);
 
   const elementKey = agent.snapshot ? buildElementKey(agent.snapshot) : "";
 
@@ -118,9 +129,7 @@ export function App(): JSX.Element {
     flow.reset();
   }, [flow, agent, license]);
 
-  if (!session) {
-    return <div className="setup-screen"><div className="setup-card">Loading...</div></div>;
-  }
+  if (!session) return null;
 
   if (mode === "setup") {
     return (

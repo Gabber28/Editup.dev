@@ -13,15 +13,20 @@ Respect priorities:
 
 Return ONLY a JSON object matching this shape:
 {
-  "summary": string,
+  "summary": string (1-300 chars),
   "files": [{ "path": string, "lines_affected": number[], "reason": string, "change_type": "target|linked_style|design_token|shared_component|import|formatting|other", "change_source": "visual|text_instruction|both" }],
   "visual_changes_applied": boolean,
   "text_instructions_applied": boolean,
   "side_effects": string[],
   "confidence": "high|medium|low",
   "recommended_action": "apply|review_first|consider_alternatives",
-  "alternatives": [{ "description": string, "pros": string[], "cons": string[] }]
-}`;
+  "alternatives": [{ "description": string, "pros": string[], "cons": string[] }] (optional)
+}
+
+CONSTRAINTS:
+- "files" must contain at least one entry.
+- If confidence is "low", then recommended_action MUST be "consider_alternatives" AND alternatives MUST have at least one entry.
+- If confidence is "high" or "medium", alternatives is optional.`;
 
 const EXECUTE_INSTRUCTION = `You are EditUp's execution assistant. The developer approved the plan below. Edit the listed files now.
 

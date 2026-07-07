@@ -2,6 +2,25 @@ use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tokio::process::Command;
 
+fn kill_process_tree(pid: u32) {
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/T", "/PID", &pid.to_string()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new("kill")
+            .args(["-9", &pid.to_string()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SpawnCliInput {
     pub cmd: String,
@@ -31,6 +50,8 @@ pub async fn spawn_cli(input: SpawnCliInput) -> Result<SpawnCliResult, String> {
         .spawn()
         .map_err(|e| format!("spawn '{}' failed: {e}", input.cmd))?;
 
+    let pid = child.id();
+
     match tokio::time::timeout(timeout, child.wait_with_output()).await {
         Ok(Ok(output)) => Ok(SpawnCliResult {
             exit_code: output.status.code(),
@@ -39,10 +60,15 @@ pub async fn spawn_cli(input: SpawnCliInput) -> Result<SpawnCliResult, String> {
             duration_ms: start.elapsed().as_millis() as u64,
         }),
         Ok(Err(e)) => Err(format!("'{}' I/O error: {e}", input.cmd)),
-        Err(_) => Err(format!(
-            "'{}' timed out after {}ms",
-            input.cmd, input.timeout_ms
-        )),
+        Err(_) => {
+            if let Some(pid) = pid {
+                kill_process_tree(pid);
+            }
+            Err(format!(
+                "'{}' timed out after {}ms",
+                input.cmd, input.timeout_ms
+            ))
+        }
     }
 }
 

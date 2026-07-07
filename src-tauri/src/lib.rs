@@ -62,6 +62,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::show_window,
             commands::get_session_token,
             commands::set_target_origin,
             commands::get_target_origin,

@@ -11,7 +11,18 @@ export function useSession(): SessionInfo | null {
   const [session, setSession] = useState<SessionInfo | null>(null);
 
   useEffect(() => {
-    invoke<SessionInfo>("get_session_token").then(setSession);
+    let attempts = 0;
+    const tryInit = (): void => {
+      invoke<SessionInfo>("get_session_token")
+        .then(setSession)
+        .catch(() => {
+          if (attempts < 2) {
+            attempts++;
+            setTimeout(tryInit, 500);
+          }
+        });
+    };
+    tryInit();
   }, []);
 
   return session;

@@ -99,12 +99,36 @@ export function extractEditPlanFromText(text: string): EditPlan {
   let parsed: unknown;
   try {
     parsed = JSON.parse(candidate);
-  } catch (cause) {
-    throw new SchemaValidationError(
-      "EditPlan response is not valid JSON",
-      [],
-      cause
-    );
+  } catch {
+    const braceExtracted = extractJsonByBraces(trimmed);
+    if (braceExtracted) {
+      try {
+        parsed = JSON.parse(braceExtracted);
+      } catch (inner) {
+        throw new SchemaValidationError(
+          "EditPlan response is not valid JSON",
+          [],
+          inner
+        );
+      }
+    } else {
+      throw new SchemaValidationError(
+        "EditPlan response is not valid JSON — no JSON object found",
+        []
+      );
+    }
   }
   return parseEditPlan(parsed);
+}
+
+function extractJsonByBraces(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}") depth--;
+    if (depth === 0) return text.slice(start, i + 1);
+  }
+  return null;
 }

@@ -55,7 +55,14 @@
       "Bash(pnpm inject:build)",
       "PowerShell(Get-NetTCPConnection *)",
       "Bash(node scripts/build-injected.mjs)",
-      "PowerShell(Get-Process *)"
+      "PowerShell(Get-Process *)",
+      "Bash(findstr \"tauri\")",
+      "PowerShell(netstat *)",
+      "Bash(pnpm test:unit)",
+      "PowerShell(Get-CimInstance *)",
+      "PowerShell(Stop-Process *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }

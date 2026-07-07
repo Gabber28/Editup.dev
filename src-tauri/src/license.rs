@@ -132,7 +132,12 @@ pub fn load_status() -> Result<LicenseStatus, String> {
 pub async fn verify_online(key: &str) -> Result<LicenseStatus, String> {
     let machine_id = machine_uid::get().map_err(|e| format!("machine-id: {e}"))?;
     let body = serde_json::json!({ "license_key": key, "instance_name": machine_id });
-    let resp = reqwest::Client::new()
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("http client: {e}"))?;
+    let resp = client
         .post(LEMON_SQUEEZY_URL)
         .header("Accept", "application/json")
         .header("Content-Type", "application/json")

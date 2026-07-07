@@ -31,7 +31,7 @@ export interface AgentConnection {
   resetOverrides: () => Promise<void>;
 }
 
-export function useAgentConnection(): AgentConnection {
+export function useAgentConnection(enabled = false): AgentConnection {
   const [connected, setConnected] = useState(false);
   const [snapshot, setSnapshot] = useState<AgentSnapshot | null>(null);
   const [editing, setEditing] = useState(false);
@@ -39,15 +39,17 @@ export function useAgentConnection(): AgentConnection {
   const snapshotRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     pollingRef.current = setInterval(() => {
       invoke<boolean>("get_agent_status").then(setConnected).catch((_: unknown) => {});
     }, 2000);
     return (): void => {
       if (pollingRef.current !== null) clearInterval(pollingRef.current);
     };
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     snapshotRef.current = setInterval(() => {
       invoke<AgentSnapshot | null>("get_latest_snapshot")
         .then((snap) => {
@@ -58,7 +60,7 @@ export function useAgentConnection(): AgentConnection {
     return (): void => {
       if (snapshotRef.current !== null) clearInterval(snapshotRef.current);
     };
-  }, []);
+  }, [enabled]);
 
   const startEditing = useCallback(async () => {
     await invoke("start_editing");

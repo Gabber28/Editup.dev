@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "EditUp",
         "width": 480,
         "height": 720,
@@ -20,7 +21,8 @@
         "resizable": true,
         "decorations": true,
         "transparent": false,
-        "alwaysOnTop": false
+        "alwaysOnTop": false,
+        "visible": false
       }
     ],
     "security": {

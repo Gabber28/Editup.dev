@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{Manager, State};
 use crate::git;
 use crate::license;
 use crate::proxy::{validate_target_origin, ProxyState, PROXY_PORT};
@@ -13,6 +13,15 @@ pub struct SessionInfo {
     pub token: String,
     pub proxy_port: u16,
     pub ws_port: u16,
+}
+
+#[tauri::command]
+pub async fn show_window(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app.get_webview_window("main")
+        .ok_or("main window not found")?;
+    window.show().map_err(|e| format!("show: {e}"))?;
+    window.set_focus().map_err(|e| format!("focus: {e}"))?;
+    Ok(())
 }
 
 #[tauri::command]

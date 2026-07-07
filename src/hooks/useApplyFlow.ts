@@ -296,35 +296,45 @@ export function useApplyFlow(sessionToken: string, canApply = true): ApplyFlow {
       });
 
       if (result.phase === "completed") {
+        let commitHash: string | null = null;
         try {
+          const planFiles = result.plan?.files.map((f) => f.path) ?? [];
           const commit = await invoke<{ hash: string }>(
             "git_auto_commit",
-            { message: `editup: ${result.plan?.summary ?? "visual edit"}`, files: [] }
+            { message: `editup: ${result.plan?.summary ?? "visual edit"}`, files: planFiles }
           );
-          set({ commitHash: commit.hash, phase: "completed" });
-
-          void recordApply({
-            timestamp: new Date().toISOString(),
-            project_root: projectRoot,
-            element_tag: snapshot.element.tag,
-            element_classes: snapshot.element.classes,
-            plan_summary: result.plan?.summary ?? "",
-            plan_files_count: result.plan?.files.length ?? 0,
-            plan_confidence: result.plan?.confidence ?? "high",
-            side_effects_count: result.plan?.side_effects.length ?? 0,
-            user_approved: true,
-            approval_mode: state.expressMode ? "express" : "toast",
-            ai_adapter_used: adapter.name,
-            files_modified: result.executeResult?.files_modified ?? [],
-            duration_ms: result.executeResult?.duration_ms ?? 0,
-            verification_visual: result.verification?.visual_check ?? "skipped",
-            verification_scope: result.verification?.scope_check ?? "pass",
-            verification_diff: result.verification?.diff_check ?? "pass_exact",
-            correction_attempts: result.verification?.correction_attempts ?? 0,
-            git_commit: commit.hash,
-            status: "completed",
+          commitHash = commit.hash;
+        } catch (err) {
+          logger.warn("auto-commit failed", {
+            reason: err instanceof Error ? err.message : String(err),
           });
+        }
 
+        set({ commitHash, phase: "completed" });
+
+        void recordApply({
+          timestamp: new Date().toISOString(),
+          project_root: projectRoot,
+          element_tag: snapshot.element.tag,
+          element_classes: snapshot.element.classes,
+          plan_summary: result.plan?.summary ?? "",
+          plan_files_count: result.plan?.files.length ?? 0,
+          plan_confidence: result.plan?.confidence ?? "high",
+          side_effects_count: result.plan?.side_effects.length ?? 0,
+          user_approved: true,
+          approval_mode: state.expressMode ? "express" : "toast",
+          ai_adapter_used: adapter.name,
+          files_modified: result.executeResult?.files_modified ?? [],
+          duration_ms: result.executeResult?.duration_ms ?? 0,
+          verification_visual: result.verification?.visual_check ?? "skipped",
+          verification_scope: result.verification?.scope_check ?? "pass",
+          verification_diff: result.verification?.diff_check ?? "pass_exact",
+          correction_attempts: result.verification?.correction_attempts ?? 0,
+          git_commit: commitHash,
+          status: "completed",
+        });
+
+        try {
           const rl = await invoke<RateLimitState>("increment_edit_count");
           if (rl.blocked) {
             logger.info("Edit limit reached after this apply", {
@@ -332,8 +342,10 @@ export function useApplyFlow(sessionToken: string, canApply = true): ApplyFlow {
               edits_limit: rl.edits_limit,
             });
           }
-        } catch {
-          set({ phase: "completed", commitHash: null });
+        } catch (err) {
+          logger.warn("rate limit increment failed", {
+            reason: err instanceof Error ? err.message : String(err),
+          });
         }
       }
     },

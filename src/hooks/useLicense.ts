@@ -95,8 +95,7 @@ export function useLicense(): LicenseHook {
 
     async function init(): Promise<void> {
       setLoading(true);
-      await fetchStatus();
-      await fetchRateLimit();
+      await Promise.all([fetchStatus(), fetchRateLimit()]);
       if (!cancelled) setLoading(false);
     }
 

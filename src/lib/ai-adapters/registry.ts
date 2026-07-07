@@ -49,7 +49,8 @@ export class AdapterRegistry {
     }
 
     const order: Array<AIAdapter["type"]> = ["mcp", "cli", "sdk", "clipboard"];
-    const preferred = available.sort(
+    const planCapable = available.filter((a) => a.type !== "clipboard");
+    const preferred = planCapable.sort(
       (a, b) => order.indexOf(a.type) - order.indexOf(b.type)
     )[0];
 
