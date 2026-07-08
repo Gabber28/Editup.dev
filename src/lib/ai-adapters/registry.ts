@@ -48,7 +48,9 @@ export class AdapterRegistry {
       }
     }
 
-    const order: Array<AIAdapter["type"]> = ["mcp", "cli", "sdk", "clipboard"];
+    // CLI e SDK são invocação ativa (plan/execute dirigidos pelo EditUp);
+    // MCP é passivo (client externo pilota) e não sustenta o pipeline sozinho.
+    const order: Array<AIAdapter["type"]> = ["cli", "sdk", "mcp", "clipboard"];
     const planCapable = available.filter((a) => a.type !== "clipboard");
     const preferred = planCapable.sort(
       (a, b) => order.indexOf(a.type) - order.indexOf(b.type)

@@ -67,14 +67,22 @@ describe("AdapterRegistry", () => {
     expect(result.available.map((a) => a.name)).toEqual(["yes"]);
   });
 
-  it("prefers MCP > CLI > SDK > clipboard", async () => {
+  it("prefers CLI > SDK > MCP > clipboard", async () => {
     const registry = new AdapterRegistry();
     registry.register(new MockAdapter("clip", "clipboard", true));
-    registry.register(new MockAdapter("cli1", "cli", true));
-    registry.register(new MockAdapter("sdk1", "sdk", true));
     registry.register(new MockAdapter("mcp1", "mcp", true));
+    registry.register(new MockAdapter("sdk1", "sdk", true));
+    registry.register(new MockAdapter("cli1", "cli", true));
     const result = await registry.detectAvailable();
-    expect(result.preferred?.name).toBe("mcp1");
+    expect(result.preferred?.name).toBe("cli1");
+  });
+
+  it("falls back to SDK when no CLI is available", async () => {
+    const registry = new AdapterRegistry();
+    registry.register(new MockAdapter("mcp1", "mcp", true));
+    registry.register(new MockAdapter("sdk1", "sdk", true));
+    const result = await registry.detectAvailable();
+    expect(result.preferred?.name).toBe("sdk1");
   });
 
   it("survives detect() throwing", async () => {
