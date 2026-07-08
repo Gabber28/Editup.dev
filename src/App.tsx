@@ -37,7 +37,7 @@ function buildElementKey(snap: AgentSnapshot): string {
   return parts.join("");
 }
 
-export function App(): JSX.Element {
+export function App(): JSX.Element | null {
   const session = useSession();
   const license = useLicense();
   const updater = useUpdater();

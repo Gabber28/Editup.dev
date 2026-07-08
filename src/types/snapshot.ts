@@ -53,6 +53,13 @@ export interface StylingInfo {
   pseudo_rules?: PseudoStateRule[];
 }
 
+export interface ChangeElementRef {
+  tag: string;
+  classes: string[];
+  source_file?: string;
+  source_line?: number;
+}
+
 export interface CSSChange {
   property: string;
   before_computed: string;
@@ -61,6 +68,8 @@ export interface CSSChange {
   expected_final_computed: string;
   change_source?: "visual" | "text_instruction";
   pseudo_state?: PseudoState;
+  /** Set when the change targets a different element than snapshot.element (multi-element edits). */
+  element_ref?: ChangeElementRef;
 }
 
 export interface EnrichedSnapshot {

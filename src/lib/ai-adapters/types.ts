@@ -10,6 +10,8 @@ export interface AdapterContext {
   apiKey?: string;
   model?: string;
   timeoutMs?: number;
+  /** Set by runPlan on retry attempts; adapters should render a strict-output warning. */
+  retryHint?: string;
 }
 
 export interface AIAdapter {

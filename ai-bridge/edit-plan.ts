@@ -71,8 +71,12 @@ export const EditPlanSchema = z
 export function parseEditPlan(input: unknown): EditPlan {
   const result = EditPlanSchema.safeParse(input);
   if (!result.success) {
+    const fields = result.error.issues
+      .slice(0, 5)
+      .map((i) => (i.path.length > 0 ? i.path.join(".") : "(root)"))
+      .join(", ");
     throw new SchemaValidationError(
-      "EditPlan failed schema validation",
+      `EditPlan failed schema validation (fields: ${fields})`,
       result.error.issues
     );
   }

@@ -96,7 +96,11 @@ export function summarizeVerification(
 ): VerificationResult {
   return {
     visual_check:
-      visual.status === "pass" ? "pass" : "fail",
+      visual.checked === 0
+        ? "skipped"
+        : visual.status === "pass"
+          ? "pass"
+          : "fail",
     scope_check:
       scopeStatus === "fail" ? "fail" : scopeStatus,
     diff_check: diffStatus,

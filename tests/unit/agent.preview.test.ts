@@ -25,7 +25,7 @@ function makeFakeWs(): {
 
 interface AgentInternals {
   selectedEl: HTMLElement | null;
-  pendingOverrides: Record<string, string>;
+  overridesMap: Map<Element, Record<string, string>>;
 }
 
 function setup(): { agent: EditUpAgent; fire: (m: AgentMessage) => void } {
@@ -67,7 +67,7 @@ describe("preview_style message", () => {
     expect(el.style.getPropertyValue("font-size")).toBe("20px");
   });
 
-  it("tracks overrides in pendingOverrides", () => {
+  it("tracks overrides per element in overridesMap", () => {
     const { agent, fire } = setup();
     const el = document.createElement("span");
     document.body.appendChild(el);
@@ -75,8 +75,8 @@ describe("preview_style message", () => {
 
     fire({ type: "preview_style", payload: { property: "margin", value: "10px" } });
 
-    const pending = (agent as unknown as AgentInternals).pendingOverrides;
-    expect(pending["margin"]).toBe("10px");
+    const overrides = (agent as unknown as AgentInternals).overridesMap.get(el);
+    expect(overrides?.["margin"]).toBe("10px");
   });
 
   it("ignores preview_style when no element is selected", () => {
@@ -110,7 +110,7 @@ describe("reset_overrides message", () => {
     expect(el.style.getPropertyValue("padding")).toBe("");
   });
 
-  it("clears pendingOverrides record after reset", () => {
+  it("clears overridesMap after reset", () => {
     const { agent, fire } = setup();
     const el = document.createElement("div");
     document.body.appendChild(el);
@@ -119,7 +119,7 @@ describe("reset_overrides message", () => {
     fire({ type: "preview_style", payload: { property: "color", value: "green" } });
     fire({ type: "reset_overrides" });
 
-    const pending = (agent as unknown as AgentInternals).pendingOverrides;
-    expect(Object.keys(pending)).toHaveLength(0);
+    const overrides = (agent as unknown as AgentInternals).overridesMap;
+    expect(overrides.size).toBe(0);
   });
 });

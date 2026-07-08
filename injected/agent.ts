@@ -211,10 +211,11 @@ class EditUpAgent {
         parts.unshift(`#${current.id}`);
         break;
       }
-      const parent = current.parentElement;
+      const parent: Element | null = current.parentElement;
       if (parent) {
+        const tagName = current.tagName;
         const siblings = Array.from(parent.children).filter(
-          (c) => c.tagName === current!.tagName
+          (c) => c.tagName === tagName
         );
         if (siblings.length > 1) {
           const idx = siblings.indexOf(current) + 1;
@@ -228,6 +229,21 @@ class EditUpAgent {
   }
 
   private sendSnapshot(): void {
+    // Hot reload replaces DOM nodes; a detached element reports empty computed
+    // styles, which would make every post-edit verification falsely fail.
+    if (this.selectedEl && !this.selectedEl.isConnected) {
+      const saved = sessionStorage.getItem("__editup_selected__");
+      let reattached: Element | null = null;
+      if (saved) {
+        try {
+          reattached = document.querySelector(saved);
+        } catch {
+          reattached = null;
+        }
+      }
+      this.selectedEl = reattached;
+      if (!reattached) this.updateBadge("element lost after reload", "#ef4444");
+    }
     if (!this.selectedEl) return;
     const el = this.selectedEl;
     const tag = el.tagName.toLowerCase();

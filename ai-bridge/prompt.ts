@@ -8,8 +8,11 @@ Your job: read the project, understand the architecture (design system, shared c
 Respect priorities:
 1. <visual_changes> are EXACT CSS values. Apply them faithfully — do not reinterpret.
 2. Changes with a "state" attribute (e.g. state=":hover") must be applied to the corresponding CSS pseudo-class selector, not to the default rule.
-3. <text_instructions> are free-form requests. Interpret them in the context of the project's conventions.
-4. If <visual_changes> and <text_instructions> conflict, visual_changes win.
+3. Changes inside an <element_changes> block target THAT block's element (see its target/source attributes), not the main <element>. Never merge them into the main element.
+4. <text_instructions> are free-form requests. Interpret them in the context of the project's conventions.
+5. If <visual_changes> and <text_instructions> conflict, visual_changes win.
+
+BE FAST. The context below already gives you the element, its source location (<source>), and the CSS rules that currently style it (<class_rules>, with rule text). Trust it: open ONLY the specific files referenced there (plus a design-token file if clearly involved). Do not list directories or scan the project. Aim for at most 3 file reads before answering.
 
 Return ONLY a JSON object matching this shape:
 {
@@ -35,12 +38,15 @@ Rules:
 - Preserve formatting and import order unless the change requires otherwise.
 - For visual changes, apply EXACT values from <visual_changes>.
 - Changes with a "state" attribute must be applied to the matching CSS pseudo-class selector (e.g. state=":hover" → .selector:hover { ... }).
+- Changes inside an <element_changes> block target THAT block's element (see its target/source attributes), not the main <element>.
 - For text instructions, apply them respecting the project's conventions.
 - After all edits, return a one-line summary of what you changed.`;
 
 export interface PromptInputs {
   snapshot: EnrichedSnapshot;
   projectRoot: string;
+  /** Set on retry after a schema-validation failure; rendered as a strict warning. */
+  retryHint?: string;
 }
 
 export interface ExecutePromptInputs extends PromptInputs {
@@ -63,15 +69,51 @@ function renderElement(snapshot: EnrichedSnapshot): string {
   return `<element>\n  ${parts.join("\n  ")}\n</element>`;
 }
 
+function renderChangeLine(c: EnrichedSnapshot["changes"][number], indent: string): string {
+  const before = escapeXml(c.before_computed);
+  const after = escapeXml(c.after_computed);
+  const prop = escapeXml(c.property);
+  const stateAttr = c.pseudo_state ? ` state="${escapeXml(c.pseudo_state)}"` : "";
+  return `${indent}<change property="${prop}" from="${before}" to="${after}"${stateAttr} />`;
+}
+
+function elementRefKey(ref: NonNullable<EnrichedSnapshot["changes"][number]["element_ref"]>): string {
+  return `${ref.tag}|${ref.classes.join(".")}|${ref.source_file ?? ""}|${ref.source_line ?? ""}`;
+}
+
 function renderVisualChanges(snapshot: EnrichedSnapshot): string {
-  const lines = snapshot.changes.map((c) => {
-    const before = escapeXml(c.before_computed);
-    const after = escapeXml(c.after_computed);
-    const prop = escapeXml(c.property);
-    const stateAttr = c.pseudo_state ? ` state="${escapeXml(c.pseudo_state)}"` : "";
-    return `  <change property="${prop}" from="${before}" to="${after}"${stateAttr} />`;
-  });
-  return `<visual_changes>\n${lines.join("\n")}\n</visual_changes>`;
+  const mainLines: string[] = [];
+  const grouped = new Map<
+    string,
+    { ref: NonNullable<EnrichedSnapshot["changes"][number]["element_ref"]>; lines: string[] }
+  >();
+
+  for (const c of snapshot.changes) {
+    if (!c.element_ref) {
+      mainLines.push(renderChangeLine(c, "  "));
+      continue;
+    }
+    const key = elementRefKey(c.element_ref);
+    let group = grouped.get(key);
+    if (!group) {
+      group = { ref: c.element_ref, lines: [] };
+      grouped.set(key, group);
+    }
+    group.lines.push(renderChangeLine(c, "    "));
+  }
+
+  const blocks: string[] = [...mainLines];
+  for (const { ref, lines } of grouped.values()) {
+    const target = `${ref.tag}${ref.classes.length > 0 ? `.${ref.classes.join(".")}` : ""}`;
+    const sourceAttr = ref.source_file
+      ? ` source="${escapeXml(ref.source_file)}:${ref.source_line ?? "?"}"`
+      : "";
+    blocks.push(
+      `  <element_changes target="${escapeXml(target)}"${sourceAttr}>\n${lines.join("\n")}\n  </element_changes>`
+    );
+  }
+
+  return `<visual_changes>\n${blocks.join("\n")}\n</visual_changes>`;
 }
 
 function renderTextInstructions(snapshot: EnrichedSnapshot): string {
@@ -79,17 +121,39 @@ function renderTextInstructions(snapshot: EnrichedSnapshot): string {
   return `<text_instructions>${sanitizeForPrompt(snapshot.text_instructions)}</text_instructions>`;
 }
 
+const RULE_TEXT_MAX = 400;
+
 function renderStyling(snapshot: EnrichedSnapshot): string {
   const { styling } = snapshot;
   const ruleEntries = Object.entries(styling.class_to_rule_map)
     .slice(0, 30)
     .map(([cls, rule]) => {
-      return `  <class name="${escapeXml(cls)}" file="${escapeXml(rule.source_file)}" line="${rule.line_number}" />`;
+      const text = rule.rule_text.length > RULE_TEXT_MAX
+        ? `${rule.rule_text.slice(0, RULE_TEXT_MAX)}…`
+        : rule.rule_text;
+      return `  <class name="${escapeXml(cls)}" file="${escapeXml(rule.source_file)}" line="${rule.line_number}">${escapeXml(text)}</class>`;
     });
+
+  const editedPseudos = new Set(
+    snapshot.changes.map((c) => c.pseudo_state).filter(Boolean)
+  );
+  const pseudoEntries = (styling.pseudo_rules ?? [])
+    .filter((r) => editedPseudos.has(r.pseudo))
+    .slice(0, 10)
+    .map((r) => {
+      const decls = Object.entries(r.properties)
+        .map(([p, v]) => `${p}: ${v}`)
+        .join("; ");
+      return `  <pseudo_rule state="${escapeXml(r.pseudo)}" selector="${escapeXml(r.selector)}" file="${escapeXml(r.source_file)}">${escapeXml(decls)}</pseudo_rule>`;
+    });
+
   return [
     `<framework>${styling.framework}</framework>`,
     ruleEntries.length > 0
       ? `<class_rules>\n${ruleEntries.join("\n")}\n</class_rules>`
+      : "",
+    pseudoEntries.length > 0
+      ? `<existing_pseudo_rules>\n${pseudoEntries.join("\n")}\n</existing_pseudo_rules>`
       : "",
   ]
     .filter(Boolean)
@@ -97,7 +161,7 @@ function renderStyling(snapshot: EnrichedSnapshot): string {
 }
 
 export function buildPlanPrompt(input: PromptInputs): string {
-  const { snapshot, projectRoot } = input;
+  const { snapshot, projectRoot, retryHint } = input;
   return [
     PLAN_INSTRUCTION,
     "",
@@ -106,6 +170,9 @@ export function buildPlanPrompt(input: PromptInputs): string {
     renderStyling(snapshot),
     renderVisualChanges(snapshot),
     renderTextInstructions(snapshot),
+    retryHint
+      ? `\nSTRICT MODE: a previous response failed validation (${escapeXml(retryHint)}). Return ONLY the JSON object, matching the schema exactly.`
+      : "",
     "",
     "Output the JSON EditPlan now. No prose, no markdown fences.",
   ]
@@ -120,6 +187,7 @@ export function buildExecutePrompt(input: ExecutePromptInputs): string {
     "",
     `<project_root>${escapeXml(projectRoot)}</project_root>`,
     renderElement(snapshot),
+    renderStyling(snapshot),
     renderVisualChanges(snapshot),
     renderTextInstructions(snapshot),
     `<approved_plan>${sanitizeForPrompt(approvedPlanJson)}</approved_plan>`,

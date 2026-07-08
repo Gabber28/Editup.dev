@@ -32,6 +32,7 @@ export class AiderAdapter implements AIAdapter {
     const prompt = buildPlanPrompt({
       snapshot,
       projectRoot: context.projectRoot,
+      ...(context.retryHint !== undefined ? { retryHint: context.retryHint } : {}),
     });
 
     const result = await spawnSafe({

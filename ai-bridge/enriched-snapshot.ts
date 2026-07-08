@@ -38,6 +38,25 @@ export const StylingInfoSchema = z.object({
   tailwind_classes: z.array(z.string().max(200)).max(500).optional(),
 });
 
+const PseudoStateSchema = z.enum([
+  "default",
+  ":hover",
+  ":focus",
+  ":active",
+  ":focus-visible",
+  ":focus-within",
+  ":visited",
+  ":checked",
+  ":disabled",
+]);
+
+const ChangeElementRefSchema = z.object({
+  tag: z.string().min(1).max(50),
+  classes: z.array(z.string().max(200)).max(100),
+  source_file: z.string().max(1024).optional(),
+  source_line: z.number().int().nonnegative().optional(),
+});
+
 export const CSSChangeSchema = z.object({
   property: z
     .string()
@@ -48,6 +67,9 @@ export const CSSChangeSchema = z.object({
   after_computed: z.string().max(1000),
   before_source_rule: z.string().max(5000).optional(),
   expected_final_computed: z.string().max(1000),
+  change_source: z.enum(["visual", "text_instruction"]).optional(),
+  pseudo_state: PseudoStateSchema.optional(),
+  element_ref: ChangeElementRefSchema.optional(),
 });
 
 export const EnrichedSnapshotSchema = z

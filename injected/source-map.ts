@@ -74,7 +74,9 @@ export async function lookupElementSource(el: Element): Promise<ElementSourceLoo
       const loc = await resolveFromSourceMap(url, 1, 0);
       if (loc) {
         return {
-          componentName: react.componentName,
+          ...(react.componentName !== undefined
+            ? { componentName: react.componentName }
+            : {}),
           source: loc,
         };
       }

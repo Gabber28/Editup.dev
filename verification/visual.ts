@@ -10,6 +10,8 @@ export interface VisualCheckInput {
 
 export interface VisualCheckResult {
   status: "pass" | "fail";
+  /** Number of changes actually compared. Pseudo-state and other-element changes are not observable in the default computed style of the verified element, so they are skipped. */
+  checked: number;
   divergences: Array<{
     property: string;
     expected: string;
@@ -20,8 +22,16 @@ export interface VisualCheckResult {
 
 export function checkVisual(input: VisualCheckInput): VisualCheckResult {
   const divergences: VisualCheckResult["divergences"] = [];
+  let checked = 0;
 
   for (const change of input.snapshot.changes) {
+    // :hover/:focus/etc. values and changes on other elements never show up
+    // in the verified element's default computed style — comparing them
+    // produces false failures and triggers bogus correction passes.
+    if (change.pseudo_state !== undefined || change.element_ref !== undefined) {
+      continue;
+    }
+    checked++;
     const actual = input.postEditComputed[change.property];
     if (actual === undefined) {
       divergences.push({
@@ -62,6 +72,7 @@ export function checkVisual(input: VisualCheckInput): VisualCheckResult {
 
   return {
     status: divergences.length === 0 ? "pass" : "fail",
+    checked,
     divergences,
   };
 }
@@ -152,11 +163,11 @@ function parseRgb(value: string): RGB | null {
   }
   const shortHexMatch = trimmed.match(/^#([0-9a-f]{3})$/i);
   if (shortHexMatch && shortHexMatch[1]) {
-    const h = shortHexMatch[1];
+    const [r, g, b] = shortHexMatch[1];
     return {
-      r: parseInt(h[0]! + h[0]!, 16),
-      g: parseInt(h[1]! + h[1]!, 16),
-      b: parseInt(h[2]! + h[2]!, 16),
+      r: parseInt(`${r}${r}`, 16),
+      g: parseInt(`${g}${g}`, 16),
+      b: parseInt(`${b}${b}`, 16),
     };
   }
   return null;

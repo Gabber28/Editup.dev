@@ -18,6 +18,27 @@ export interface CapturedStyling {
   tailwindClasses?: string[];
 }
 
+/**
+ * Converts a stylesheet href into a project-relative path when possible.
+ * Dev servers (Vite) serve source CSS at its real path, so
+ * "http://localhost:5173/src/app.css?t=123" becomes "src/app.css" — a hint
+ * the AI can open directly instead of searching the project.
+ * @param href - Raw stylesheet href, or null for inline styles.
+ * @returns A relative path, the original href, or "<inline>".
+ */
+export function normalizeSheetSource(href: string | null): string {
+  if (!href) return "<inline>";
+  try {
+    const url = new URL(href, location.href);
+    if (url.origin === location.origin) {
+      return url.pathname.replace(/^\//, "");
+    }
+    return href;
+  } catch {
+    return href;
+  }
+}
+
 export function captureComputedStyle(el: Element): Record<string, string> {
   const computed = getComputedStyle(el);
   const out: Record<string, string> = {};
@@ -39,13 +60,13 @@ export function captureMatchingRules(el: Element): CapturedRule[] {
       continue;
     }
     if (!cssRules) continue;
-    walkRules(cssRules, sheet.href ?? "<inline>", (rule) => {
+    walkRules(cssRules, normalizeSheetSource(sheet.href), (rule) => {
       if (!(rule instanceof CSSStyleRule)) return;
       try {
         if (el.matches(rule.selectorText)) {
           rules.push({
             selector: rule.selectorText,
-            source_file: sheet.href ?? "<inline>",
+            source_file: normalizeSheetSource(sheet.href),
             rule_text: rule.cssText,
             line_number: 0,
           });
@@ -104,7 +125,7 @@ export function capturePseudoRules(el: Element): CapturedPseudoRule[] {
     let cssRules: CSSRuleList | null = null;
     try { cssRules = sheet.cssRules; } catch { continue; }
     if (!cssRules) continue;
-    walkRules(cssRules, sheet.href ?? "<inline>", (rule) => {
+    walkRules(cssRules, normalizeSheetSource(sheet.href), (rule) => {
       if (!(rule instanceof CSSStyleRule)) return;
       const sel = rule.selectorText;
       const m = PSEUDO_RE.exec(sel);
@@ -125,7 +146,7 @@ export function capturePseudoRules(el: Element): CapturedPseudoRule[] {
           pseudo,
           selector: sel,
           properties: props,
-          source_file: sheet.href ?? "<inline>",
+          source_file: normalizeSheetSource(sheet.href),
           line_number: 0,
         });
       }

@@ -78,6 +78,7 @@ describe("prompt — framework mention for every value", () => {
     });
     const prompt = buildPlanPrompt({ snapshot, projectRoot: "/proj" });
 
-    expect(prompt).not.toContain("<class_rules>");
+    // the instruction text mentions <class_rules>; assert the rendered block is absent
+    expect(prompt).not.toContain("<class_rules>\n");
   });
 });

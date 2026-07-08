@@ -83,7 +83,8 @@ describe("captureMatchingRules", () => {
     expect(result).toHaveLength(1);
     expect(result[0].selector).toBe(".btn");
     expect(result[0].rule_text).toBe(".btn { color: red; }");
-    expect(result[0].source_file).toBe("/styles.css");
+    // hrefs are normalized to project-relative paths (leading "/" stripped)
+    expect(result[0].source_file).toBe("styles.css");
   });
 
   it("excludes rules that do not match the element", () => {

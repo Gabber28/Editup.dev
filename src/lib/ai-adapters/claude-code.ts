@@ -33,6 +33,7 @@ export class ClaudeCodeAdapter implements AIAdapter {
     const prompt = buildPlanPrompt({
       snapshot,
       projectRoot: context.projectRoot,
+      ...(context.retryHint !== undefined ? { retryHint: context.retryHint } : {}),
     });
 
     const args = [

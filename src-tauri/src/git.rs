@@ -7,6 +7,7 @@ pub struct GitStatus {
     pub is_repo: bool,
     pub is_clean: bool,
     pub branch: String,
+    pub changed_files: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -40,11 +41,13 @@ pub fn status(project_root: &str) -> Result<GitStatus, String> {
             is_repo: false,
             is_clean: false,
             branch: String::new(),
+            changed_files: Vec::new(),
         });
     }
 
     let porcelain = run_git(root, &["status", "--porcelain"])?;
     let is_clean = porcelain.trim().is_empty();
+    let changed_files = parse_porcelain_paths(&porcelain);
 
     let branch = run_git(root, &["rev-parse", "--abbrev-ref", "HEAD"])
         .unwrap_or_default()
@@ -55,7 +58,26 @@ pub fn status(project_root: &str) -> Result<GitStatus, String> {
         is_repo: true,
         is_clean,
         branch,
+        changed_files,
     })
+}
+
+/// Extracts repo-relative paths from `git status --porcelain` output.
+/// For renames (`R  old -> new`) the new path is kept.
+fn parse_porcelain_paths(porcelain: &str) -> Vec<String> {
+    porcelain
+        .lines()
+        .filter(|l| l.len() > 3)
+        .map(|l| {
+            let path = &l[3..];
+            let path = match path.split_once(" -> ") {
+                Some((_, new)) => new,
+                None => path,
+            };
+            path.trim().trim_matches('"').to_string()
+        })
+        .filter(|p| !p.is_empty())
+        .collect()
 }
 
 pub fn auto_commit(

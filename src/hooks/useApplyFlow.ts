@@ -14,7 +14,7 @@ import { AdapterRegistry } from "@/lib/ai-adapters/registry.js";
 import { ClaudeCodeAdapter } from "@/lib/ai-adapters/claude-code.js";
 import { AiderAdapter } from "@/lib/ai-adapters/aider.js";
 import { CopyPromptAdapter } from "@/lib/ai-adapters/copy-prompt.js";
-import { createVerifier } from "@/lib/verify-flow.js";
+import { createVerifier, capturePreexistingChanges } from "@/lib/verify-flow.js";
 import {
   PlanFailedError,
   ExecuteFailedError,
@@ -133,7 +133,24 @@ function buildRegistry(): AdapterRegistry {
   return reg;
 }
 
-function buildMultiSnapshot(
+function beforeValueFor(
+  snap: AgentSnapshot,
+  property: string,
+  state: string
+): string {
+  if (state !== "default") {
+    for (const rule of snap.styling.pseudo_rules ?? []) {
+      if (rule.pseudo === state && rule.properties[property] !== undefined) {
+        return rule.properties[property];
+      }
+    }
+  }
+  // computed_style is captured at selection time, before any preview override.
+  const computed = snap.computed_style ?? snap.base_computed_style ?? {};
+  return computed[property] ?? "";
+}
+
+export function buildMultiSnapshot(
   cache: Record<string, AgentSnapshot>,
   allOverrides: Record<string, Record<string, Record<string, string>>>,
   textInstructions: string
@@ -155,47 +172,40 @@ function buildMultiSnapshot(
   }
 
   const allChanges: CSSChange[] = [];
-  const descriptions: string[] = [];
 
   for (const key of editedKeys) {
     const snap = cache[key];
     if (!snap) continue;
     const stateMap = allOverrides[key] ?? {};
-    const computed = snap.base_computed_style ?? snap.computed_style ?? {};
-    const elLabel = `<${snap.element.tag}${snap.element.classes.length > 0 ? ` class="${snap.element.classes.join(" ")}"` : ""}>`;
-    const perElement: string[] = [];
+    const isPrimary = key === primaryKey;
 
     for (const [state, props] of Object.entries(stateMap)) {
       for (const [property, value] of Object.entries(props)) {
         const change: CSSChange = {
           property,
-          before_computed: computed[property] ?? "",
+          before_computed: beforeValueFor(snap, property, state),
           after_computed: value,
           expected_final_computed: value,
+          change_source: "visual",
         };
         if (state !== "default") {
           change.pseudo_state = state as PseudoState;
         }
+        if (!isPrimary) {
+          change.element_ref = {
+            tag: snap.element.tag,
+            classes: snap.element.classes,
+            ...(snap.element.source_file !== undefined
+              ? { source_file: snap.element.source_file }
+              : {}),
+            ...(snap.element.source_line !== undefined
+              ? { source_line: snap.element.source_line }
+              : {}),
+          };
+        }
         allChanges.push(change);
-        const stateLabel = state === "default" ? "" : ` (${state})`;
-        perElement.push(`  ${property}${stateLabel}: ${computed[property] ?? "unset"} → ${value}`);
       }
     }
-
-    if (editedKeys.length > 1) {
-      const src = snap.element.source_file
-        ? ` (${snap.element.source_file}:${snap.element.source_line ?? 0})`
-        : "";
-      descriptions.push(`Element ${elLabel}${src}:\n${perElement.join("\n")}`);
-    }
-  }
-
-  let combined = "";
-  if (editedKeys.length > 1) {
-    combined = `Multiple elements edited:\n\n${descriptions.join("\n\n")}`;
-    if (textInstructions) combined += `\n\nAdditional instructions: ${textInstructions}`;
-  } else {
-    combined = textInstructions;
   }
 
   const base: EnrichedSnapshot = {
@@ -204,10 +214,13 @@ function buildMultiSnapshot(
       framework: (primarySnap.styling.framework ?? "plain-css") as EnrichedSnapshot["styling"]["framework"],
       class_to_rule_map: primarySnap.styling.class_to_rule_map,
       active_css_variables: primarySnap.styling.active_css_variables,
+      ...(primarySnap.styling.pseudo_rules
+        ? { pseudo_rules: primarySnap.styling.pseudo_rules }
+        : {}),
     },
     changes: allChanges,
   };
-  if (combined) base.text_instructions = combined;
+  if (textInstructions) base.text_instructions = textInstructions;
   return base;
 }
 
@@ -277,7 +290,8 @@ export function useApplyFlow(sessionToken: string, canApply = true): ApplyFlow {
 
       const context: AdapterContext = { projectRoot, sessionToken };
       const orchestrator = new Orchestrator(adapter);
-      const verifier = createVerifier(adapter, snapshot, context);
+      const preexisting = await capturePreexistingChanges();
+      const verifier = createVerifier(adapter, snapshot, context, preexisting);
 
       set({ phase: "planning", error: null, plan: null, approval: null });
 

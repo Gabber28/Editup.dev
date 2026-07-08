@@ -16,21 +16,25 @@ export async function runPlan(
   context: AdapterContext
 ): Promise<EditPlan> {
   let lastError: unknown;
+  let retryHint: string | undefined;
 
   for (let attempt = 1; attempt <= MAX_PLAN_ATTEMPTS; attempt++) {
     try {
-      const plan = await adapter.plan(snapshot, context);
+      const attemptContext = retryHint ? { ...context, retryHint } : context;
+      const plan = await adapter.plan(snapshot, attemptContext);
       const validated = tryParseEditPlan(plan);
       if (!validated.success) {
+        const fields = validated.issues
+          .map((i) => i.path.join("."))
+          .filter(Boolean)
+          .slice(0, 20);
         logger.warn("plan schema validation failed", {
           adapter: adapter.name,
           attempt,
           issue_count: validated.issues.length,
-          fields: validated.issues
-            .map((i) => i.path.join("."))
-            .filter(Boolean)
-            .slice(0, 20),
+          fields: fields.join(","),
         });
+        retryHint = `invalid fields: ${fields.join(", ") || "(root)"}`;
         lastError = new PlanFailedError(
           `Plan from ${adapter.name} failed schema validation`,
           attempt

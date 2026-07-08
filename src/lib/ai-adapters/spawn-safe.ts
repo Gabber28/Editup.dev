@@ -1,6 +1,7 @@
 import { SecurityViolationError } from "../errors.js";
 
 const FORBIDDEN_FLAGS = [
+  // eslint-disable-next-line no-restricted-syntax -- denylist entry that BLOCKS this flag at runtime
   "--dangerously-skip-permissions",
   "--skip-permissions",
 ];
