@@ -65,7 +65,15 @@
       "Bash(git commit *)",
       "Bash(cargo test *)",
       "Bash(pnpm vitest *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(grep -rnA8 \"alias\" \"C:/Users/gabri/Documents/codigos/SaaS's/Editup.dev/vite.config.ts\")",
+      "PowerShell($conns = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue; if \\($conns\\) { $conns | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } ; \"killed: $\\($conns.OwningProcess | Select-Object -Unique\\)\" } else { \"port free\" })",
+      "Bash(grep -Ev \"^tests/|^>|^$\")",
+      "Bash(pnpm lint *)",
+      "Bash(npx eslint *)",
+      "Bash(node -e \"const g=require\\('globals'\\); console.log\\('globals ok', Object.keys\\(g\\).slice\\(0,5\\).join\\(','\\)\\)\")",
+      "Bash(node -e \"1\")",
+      "Bash(grep -Ev \"^tests/|^>|^$| \")"
     ]
   }
 }
