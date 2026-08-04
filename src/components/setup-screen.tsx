@@ -5,6 +5,7 @@ export interface SetupScreenProps {
   agentConnected: boolean;
   onConnect: (url: string, proxyPort: number) => Promise<void>;
   onReady: (projectRoot: string) => void;
+  onCancel: () => void;
   error: string | null;
   loading: boolean;
   targetOrigin: string | null;
@@ -93,6 +94,13 @@ export function SetupScreen(props: SetupScreenProps): JSX.Element {
             <p className="setup-hint">
               Waiting for the agent to connect...
             </p>
+            <button
+              type="button"
+              className="setup-btn setup-btn--ghost"
+              onClick={props.onCancel}
+            >
+              Cancel
+            </button>
           </div>
         )}
       </div>

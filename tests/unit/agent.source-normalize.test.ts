@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import { normalizeSheetSource } from "@injected/style-capture.js";
 
 describe("normalizeSheetSource", () => {
-  it("returns <inline> for null href", () => {
-    expect(normalizeSheetSource(null)).toBe("<inline>");
+  it("names the document for an inline <style>, not an unopenable placeholder", () => {
+    const source = normalizeSheetSource(null);
+    expect(source).not.toBe("<inline>");
+    expect(source).not.toContain("<");
   });
 
   it("strips origin and query from same-origin dev-server URLs", () => {

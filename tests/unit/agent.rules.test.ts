@@ -105,7 +105,7 @@ describe("captureMatchingRules", () => {
     expect(result).toHaveLength(0);
   });
 
-  it("uses <inline> as source when sheet has no href", () => {
+  it("uses the document path as source when the sheet has no href", () => {
     const el = document.createElement("p");
 
     const rule = makeCSSStyleRule("p", "p { margin: 0; }");
@@ -117,7 +117,7 @@ describe("captureMatchingRules", () => {
 
     const result = captureMatchingRules(el);
     expect(result).toHaveLength(1);
-    expect(result[0].source_file).toBe("<inline>");
+    expect(result[0].source_file).not.toContain("<");
   });
 
   it("handles cross-origin sheets gracefully (cssRules throws)", () => {

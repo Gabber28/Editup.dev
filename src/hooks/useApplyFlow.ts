@@ -7,6 +7,7 @@ import type {
 } from "@bridge/orchestrator.js";
 import type { EditPlan } from "@/types/edit-plan.js";
 import type { VerificationResult } from "@/types/execute.js";
+import { hasVerificationWarnings } from "@/types/execute.js";
 import type { RateLimitState } from "@/types/license.js";
 import type { EnrichedSnapshot, CSSChange, PseudoState } from "@/types/snapshot.js";
 import type { AIAdapter, AdapterContext, DetectionResult } from "@/lib/ai-adapters/types.js";
@@ -201,6 +202,16 @@ export function buildMultiSnapshot(
             ...(snap.element.source_line !== undefined
               ? { source_line: snap.element.source_line }
               : {}),
+            // Instance identity: two cards with the same classes must not merge.
+            ...(snap.element.dom_path !== undefined
+              ? { dom_path: snap.element.dom_path }
+              : {}),
+            ...(snap.element.dom_index !== undefined
+              ? { dom_index: snap.element.dom_index }
+              : {}),
+            ...(snap.element.text_preview
+              ? { text_preview: snap.element.text_preview }
+              : {}),
           };
         }
         allChanges.push(change);
@@ -208,12 +219,34 @@ export function buildMultiSnapshot(
     }
   }
 
+  // Merge the CSS context of every edited element: taking it from the primary
+  // alone left secondary elements with no rules at all, so the AI had to guess
+  // where their styles lived — and guessed the shared rule.
+  const classToRule: EnrichedSnapshot["styling"]["class_to_rule_map"] = {};
+  const cssVars: EnrichedSnapshot["styling"]["active_css_variables"] = {};
+  const matchingRules: NonNullable<EnrichedSnapshot["styling"]["matching_rules"]> = [];
+  const seenSelectors = new Set<string>();
+
+  for (const key of editedKeys) {
+    const snap = cache[key];
+    if (!snap) continue;
+    Object.assign(classToRule, snap.styling.class_to_rule_map);
+    Object.assign(cssVars, snap.styling.active_css_variables);
+    for (const rule of snap.styling.matching_rules ?? []) {
+      const id = `${rule.source_file}|${rule.selector}`;
+      if (seenSelectors.has(id)) continue;
+      seenSelectors.add(id);
+      matchingRules.push(rule);
+    }
+  }
+
   const base: EnrichedSnapshot = {
     element: primarySnap.element,
     styling: {
       framework: (primarySnap.styling.framework ?? "plain-css") as EnrichedSnapshot["styling"]["framework"],
-      class_to_rule_map: primarySnap.styling.class_to_rule_map,
-      active_css_variables: primarySnap.styling.active_css_variables,
+      class_to_rule_map: classToRule,
+      active_css_variables: cssVars,
+      ...(matchingRules.length > 0 ? { matching_rules: matchingRules } : {}),
       ...(primarySnap.styling.pseudo_rules
         ? { pseudo_rules: primarySnap.styling.pseudo_rules }
         : {}),
@@ -340,12 +373,16 @@ export function useApplyFlow(sessionToken: string, canApply = true): ApplyFlow {
           ai_adapter_used: adapter.name,
           files_modified: result.executeResult?.files_modified ?? [],
           duration_ms: result.executeResult?.duration_ms ?? 0,
-          verification_visual: result.verification?.visual_check ?? "skipped",
-          verification_scope: result.verification?.scope_check ?? "pass",
-          verification_diff: result.verification?.diff_check ?? "pass_exact",
+          // Absent checks are recorded as unverified, never as a pass — the
+          // history is an audit trail, not a success log.
+          verification_visual: result.verification?.visual_check ?? "unverified",
+          verification_scope: result.verification?.scope_check ?? "skipped",
+          verification_diff: result.verification?.diff_check ?? "no_git",
           correction_attempts: result.verification?.correction_attempts ?? 0,
           git_commit: commitHash,
-          status: "completed",
+          status: hasVerificationWarnings(result.verification ?? null)
+            ? "completed_with_warnings"
+            : "completed",
         });
 
         try {

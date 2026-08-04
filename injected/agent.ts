@@ -2,6 +2,9 @@ import { FloatingBracketsOverlay } from "./overlay.js";
 import { buildSnapshotPayload } from "./snapshot-builder.js";
 import { PseudoPreviewManager } from "./pseudo-preview.js";
 import { lookupReactFiber } from "./source-map.js";
+import { DragController, type DragMode, type GestureChange } from "./drag.js";
+import { buildDomPath } from "./dom-path.js";
+import { captureComputedStyle } from "./style-capture.js";
 
 interface AgentConfig {
   wsUrl: string;
@@ -14,22 +17,54 @@ interface AgentMessage {
   token?: string;
 }
 
+/** Marks the reload requested for verification, so the snapshot after it is tagged. */
+const VERIFY_FLAG = "__editup_verify__";
+
 class EditUpAgent {
   private overlay = new FloatingBracketsOverlay();
   private socket: WebSocket | null = null;
   private selectedEl: Element | null = null;
   private editing = false;
   private overridesMap = new Map<Element, Record<string, string>>();
+  private imageOriginals = new Map<HTMLImageElement, string>();
+  private textOriginals = new Map<Element, string>();
+  private classOriginals = new Map<Element, string>();
+  private svgInnerOriginals = new Map<SVGSVGElement, string>();
+  private useHrefOriginals = new Map<SVGUseElement, string>();
+  private linkOriginals = new Map<Element, { href: string | null; target: string | null; cursor: string }>();
   private pseudoPreview = new PseudoPreviewManager();
   private badge: HTMLDivElement | null = null;
+  private gestureSeq = 0;
+  private drag = new DragController({
+    getSelected: () => (this.editing ? this.selectedEl : null),
+    onCommit: (changes) => this.sendGestureChanges(changes),
+    onStatus: (text, color) => this.updateBadge(text, color),
+  });
 
   constructor(private readonly config: AgentConfig) {}
 
   start(): void {
     this.overlay.attach();
+    // Attached before the hover/click listeners so a drag in progress can stop
+    // the event before it is read as a hover or a selection click.
+    this.drag.attach();
     this.installPointerListeners();
     this.createBadge();
     this.connect();
+  }
+
+  /**
+   * Reports a finished drag to the app. The page already shows the result, so
+   * the app records these as pending changes without echoing a preview back.
+   */
+  private sendGestureChanges(changes: GestureChange[]): void {
+    this.gestureSeq += 1;
+    this.send({
+      type: "gesture_change",
+      payload: { id: this.gestureSeq, changes },
+    });
+    this.updateBadge(`moved (${changes.length})`, "#22c55e");
+    this.sendSnapshot();
   }
 
   private createBadge(): void {
@@ -107,7 +142,27 @@ class EditUpAgent {
         const p = msg.payload as
           | { property: string; value: string }
           | undefined;
-        if (p && this.selectedEl instanceof HTMLElement) {
+        if (p && p.property === "src" && this.selectedEl instanceof HTMLImageElement) {
+          // src is an attribute, not a style property — set it directly and
+          // remember the original so reset can restore it.
+          if (!this.imageOriginals.has(this.selectedEl)) {
+            this.imageOriginals.set(
+              this.selectedEl,
+              this.selectedEl.getAttribute("src") ?? ""
+            );
+          }
+          this.selectedEl.setAttribute("src", p.value);
+          break;
+        }
+        if (p && p.property.startsWith("__") && this.selectedEl) {
+          this.previewMedia(this.selectedEl, p.property, p.value);
+          break;
+        }
+        if (
+          p &&
+          (this.selectedEl instanceof HTMLElement ||
+            this.selectedEl instanceof SVGElement)
+        ) {
           this.selectedEl.style.setProperty(p.property, p.value);
           let elOverrides = this.overridesMap.get(this.selectedEl);
           if (!elOverrides) {
@@ -125,6 +180,36 @@ class EditUpAgent {
         if (pp && this.selectedEl) {
           this.pseudoPreview.preview(this.selectedEl, pp.pseudo, pp.property, pp.value);
         }
+        break;
+      }
+      case "capture_elements": {
+        // Verification of a multi-element edit needs each element's own styles;
+        // the selected element's computed style says nothing about its siblings.
+        const req = msg.payload as { paths?: string[] } | undefined;
+        const styles: Record<string, Record<string, string>> = {};
+        for (const path of req?.paths ?? []) {
+          try {
+            const found = document.querySelector(path);
+            if (found) styles[path] = captureComputedStyle(found);
+          } catch {
+            // invalid selector — reported as missing, never as a match
+          }
+        }
+        this.send({ type: "elements_captured", payload: { styles } });
+        break;
+      }
+      case "verify_reload":
+        // Verification must observe the page rebuilt from source: the live
+        // previews are inline styles, and reading them back would confirm the
+        // edit even when the AI wrote nothing.
+        sessionStorage.setItem(VERIFY_FLAG, "1");
+        location.reload();
+        break;
+      case "set_drag_mode": {
+        const dm = msg.payload as { mode?: string } | undefined;
+        const mode: DragMode = dm?.mode === "free" ? "free" : "snap";
+        this.drag.setMode(mode);
+        this.updateBadge(mode === "free" ? "free edit ON" : "snap to siblings", "#22c55e");
         break;
       }
       case "reset_overrides":
@@ -159,6 +244,13 @@ class EditUpAgent {
 
   private onClick(ev: MouseEvent): void {
     if (!this.editing) return;
+    // A drag ends with a click event; selecting on it would re-anchor the
+    // selection to whatever the pointer landed on.
+    if (this.drag.shouldSuppressClick()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
     this.updateBadge("click detected...", "#3b82f6");
     const target = this.elementFromPoint(ev.clientX, ev.clientY);
     if (!target) {
@@ -202,30 +294,7 @@ class EditUpAgent {
   }
 
   private buildSelector(el: Element): string {
-    if (el.id) return `#${el.id}`;
-    const parts: string[] = [];
-    let current: Element | null = el;
-    while (current && current !== document.documentElement) {
-      let seg = current.tagName.toLowerCase();
-      if (current.id) {
-        parts.unshift(`#${current.id}`);
-        break;
-      }
-      const parent: Element | null = current.parentElement;
-      if (parent) {
-        const tagName = current.tagName;
-        const siblings = Array.from(parent.children).filter(
-          (c) => c.tagName === tagName
-        );
-        if (siblings.length > 1) {
-          const idx = siblings.indexOf(current) + 1;
-          seg += `:nth-of-type(${idx})`;
-        }
-      }
-      parts.unshift(seg);
-      current = parent;
-    }
-    return parts.join(" > ");
+    return buildDomPath(el);
   }
 
   private sendSnapshot(): void {
@@ -249,6 +318,12 @@ class EditUpAgent {
     const tag = el.tagName.toLowerCase();
     this.updateBadge(`capturing ${tag}...`, "#a855f7");
     const payload = buildSnapshotPayload(el);
+    // Tag the first snapshot after a verification reload so the app knows this
+    // capture reflects the source, not the live previews.
+    if (sessionStorage.getItem(VERIFY_FLAG)) {
+      sessionStorage.removeItem(VERIFY_FLAG);
+      payload.verification = true;
+    }
     const wsOpen = this.socket?.readyState === WebSocket.OPEN;
     this.send({ type: "snapshot", payload });
     this.updateBadge(
@@ -257,16 +332,125 @@ class EditUpAgent {
     );
   }
 
+  /**
+   * Applies a non-CSS "media" change (emoji text, class swap, <use> href, or
+   * inline SVG markup) and remembers the original so reset can restore it.
+   */
+  private previewMedia(el: Element, property: string, value: string): void {
+    const svg = el instanceof SVGSVGElement ? el : el.closest("svg");
+    switch (property) {
+      case "__text__":
+        if (!this.textOriginals.has(el)) {
+          this.textOriginals.set(el, el.textContent ?? "");
+        }
+        el.textContent = value;
+        break;
+      case "__class__":
+        if (!this.classOriginals.has(el)) {
+          this.classOriginals.set(el, el.getAttribute("class") ?? "");
+        }
+        el.setAttribute("class", value);
+        break;
+      case "__svg_inner__":
+        if (svg) {
+          if (!this.svgInnerOriginals.has(svg)) {
+            this.svgInnerOriginals.set(svg, svg.innerHTML);
+          }
+          svg.innerHTML = value;
+        }
+        break;
+      case "__use_href__": {
+        const use = svg?.querySelector("use") ?? null;
+        if (use) {
+          if (!this.useHrefOriginals.has(use)) {
+            this.useHrefOriginals.set(
+              use,
+              use.getAttribute("href") ?? use.getAttribute("xlink:href") ?? ""
+            );
+          }
+          use.setAttribute("href", value);
+          use.setAttribute("xlink:href", value);
+        }
+        break;
+      }
+      case "__href__":
+        this.captureLinkOriginal(el);
+        if (el instanceof HTMLAnchorElement) {
+          if (value) el.setAttribute("href", value);
+          else el.removeAttribute("href");
+        } else if (el instanceof HTMLElement) {
+          // Not an anchor — preview is cosmetic; the AI wraps it in <a> in the
+          // source. Show a pointer cursor and stash the intended href.
+          if (value) {
+            el.style.cursor = "pointer";
+            el.setAttribute("data-editup-href", value);
+          } else {
+            el.style.removeProperty("cursor");
+            el.removeAttribute("data-editup-href");
+          }
+        }
+        break;
+      case "__target__":
+        this.captureLinkOriginal(el);
+        if (el instanceof HTMLAnchorElement) {
+          if (value) el.setAttribute("target", value);
+          else el.removeAttribute("target");
+        } else if (value) {
+          el.setAttribute("data-editup-target", value);
+        } else {
+          el.removeAttribute("data-editup-target");
+        }
+        break;
+    }
+  }
+
+  /** Records an element's original link-related state once, for reset. */
+  private captureLinkOriginal(el: Element): void {
+    if (this.linkOriginals.has(el)) return;
+    this.linkOriginals.set(el, {
+      href: el.getAttribute("href"),
+      target: el.getAttribute("target"),
+      cursor: el instanceof HTMLElement ? el.style.cursor : "",
+    });
+  }
+
   private resetOverrides(): void {
     for (const [el, overrides] of this.overridesMap) {
-      if (el instanceof HTMLElement) {
+      if (el instanceof HTMLElement || el instanceof SVGElement) {
         for (const prop of Object.keys(overrides)) {
           el.style.removeProperty(prop);
         }
       }
     }
     this.overridesMap.clear();
+    for (const [img, src] of this.imageOriginals) {
+      if (src) img.setAttribute("src", src);
+      else img.removeAttribute("src");
+    }
+    this.imageOriginals.clear();
+    for (const [el, text] of this.textOriginals) el.textContent = text;
+    this.textOriginals.clear();
+    for (const [el, cls] of this.classOriginals) el.setAttribute("class", cls);
+    this.classOriginals.clear();
+    for (const [svg, inner] of this.svgInnerOriginals) svg.innerHTML = inner;
+    this.svgInnerOriginals.clear();
+    for (const [use, href] of this.useHrefOriginals) {
+      use.setAttribute("href", href);
+      use.setAttribute("xlink:href", href);
+    }
+    this.useHrefOriginals.clear();
+    for (const [el, orig] of this.linkOriginals) {
+      if (orig.href !== null) el.setAttribute("href", orig.href);
+      else el.removeAttribute("href");
+      if (orig.target !== null) el.setAttribute("target", orig.target);
+      else el.removeAttribute("target");
+      if (el instanceof HTMLElement) el.style.cursor = orig.cursor;
+      el.removeAttribute("data-editup-href");
+      el.removeAttribute("data-editup-target");
+    }
+    this.linkOriginals.clear();
     this.pseudoPreview.resetAll();
+    this.drag.restoreOriginals();
   }
 }
 

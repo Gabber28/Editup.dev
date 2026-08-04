@@ -14,7 +14,7 @@ const failingVisual: VisualCheckResult = {
 };
 
 describe("verification — max retries enforcement", () => {
-  it("stops after 2 failed correction attempts", async () => {
+  it("stops after 4 failed correction attempts", async () => {
     const recheck = vi.fn<() => Promise<VisualCheckResult>>()
       .mockResolvedValue(failingVisual);
 
@@ -27,12 +27,12 @@ describe("verification — max retries enforcement", () => {
       recheckVisual: recheck,
     });
 
-    expect(result.attempts).toBe(2);
+    expect(result.attempts).toBe(4);
     expect(result.finalVisual.status).toBe("fail");
-    expect(recheck).toHaveBeenCalledTimes(2);
+    expect(recheck).toHaveBeenCalledTimes(4);
   });
 
-  it("does NOT attempt a 3rd correction", async () => {
+  it("does NOT attempt a 5th correction", async () => {
     const executeFn = vi.fn();
     const adapter = new MockAdapter();
     adapter.execute = executeFn.mockResolvedValue({
@@ -52,6 +52,6 @@ describe("verification — max retries enforcement", () => {
       recheckVisual: recheck,
     });
 
-    expect(executeFn).toHaveBeenCalledTimes(2);
+    expect(executeFn).toHaveBeenCalledTimes(4);
   });
 });

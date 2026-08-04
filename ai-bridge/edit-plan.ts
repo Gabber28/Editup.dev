@@ -9,6 +9,7 @@ const ChangeTypeSchema = z.enum([
   "shared_component",
   "import",
   "formatting",
+  "structural",
   "other",
 ]);
 
@@ -127,7 +128,7 @@ export function extractEditPlanFromText(text: string): EditPlan {
 
 const CHANGE_TYPES = [
   "target", "linked_style", "design_token", "shared_component",
-  "import", "formatting", "other",
+  "import", "formatting", "structural", "other",
 ] as const;
 const CHANGE_SOURCES = ["visual", "text_instruction", "both"] as const;
 const CONFIDENCES = ["high", "medium", "low"] as const;

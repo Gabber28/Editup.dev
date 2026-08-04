@@ -58,6 +58,29 @@ impl ProxyState {
     }
 }
 
+/// Probes the target origin to confirm a dev server is actually listening
+/// there before we commit to it. Any HTTP response (even 404/500) means a
+/// server is present; a connection refusal or timeout means nothing is there,
+/// so the UI can send the user back to the URL prompt instead of spinning
+/// forever waiting for an agent that will never load.
+pub async fn probe_target(origin: &str) -> Result<(), String> {
+    validate_target_origin(origin)?;
+    let url = origin.trim_end_matches('/').to_string();
+    match upstream_client()
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(4))
+        .send()
+        .await
+    {
+        Ok(_) => Ok(()),
+        Err(err) if err.is_connect() || err.is_timeout() => Err(format!(
+            "Nothing is responding at {origin}. Is your dev server running on that port?"
+        )),
+        // Reachable but some non-transport oddity — a server is still there.
+        Err(_) => Ok(()),
+    }
+}
+
 pub fn validate_target_origin(origin: &str) -> Result<(), String> {
     let parsed = url::Url::parse(origin).map_err(|e| format!("invalid url: {e}"))?;
     if !matches!(parsed.scheme(), "http" | "https") {

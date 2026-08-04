@@ -5,6 +5,8 @@ export type ChangeType =
   | "shared_component"
   | "import"
   | "formatting"
+  /** Markup moved rather than restyled (drag-to-reorder). */
+  | "structural"
   | "other";
 
 export type ChangeSource = "visual" | "text_instruction" | "both";

@@ -1,0 +1,23 @@
+/** Normalizes separators and strips a leading "./" so paths compare cleanly. */
+export function normalizePath(p: string): string {
+  return p.replace(/\\/g, "/").replace(/^\.\//, "");
+}
+
+/**
+ * Rewrites an absolute path reported by an AI tool into a project-relative one,
+ * so it can be compared against the plan's paths and git's output.
+ *
+ * @param filePath Path as reported by the tool (usually absolute)
+ * @param projectRoot Root the edit session is scoped to
+ * @returns The path relative to the root, or the normalized input when outside it
+ */
+export function toProjectRelative(filePath: string, projectRoot: string): string {
+  const file = normalizePath(filePath);
+  const root = normalizePath(projectRoot).replace(/\/+$/, "");
+  if (!root) return file;
+  const prefix = `${root}/`;
+  if (file.toLowerCase().startsWith(prefix.toLowerCase())) {
+    return file.slice(prefix.length);
+  }
+  return file;
+}

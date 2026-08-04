@@ -4,7 +4,7 @@ use serde::Serialize;
 use tauri::{Manager, State};
 use crate::git;
 use crate::license;
-use crate::proxy::{validate_target_origin, ProxyState, PROXY_PORT};
+use crate::proxy::{probe_target, validate_target_origin, ProxyState, PROXY_PORT};
 use crate::rate_limit;
 use crate::ws::{WsState, WS_PORT};
 
@@ -40,6 +40,11 @@ pub async fn set_target_origin(
 ) -> Result<(), String> {
     validate_target_origin(&origin)?;
     state.set_target(origin).await
+}
+
+#[tauri::command]
+pub async fn check_target_reachable(origin: String) -> Result<(), String> {
+    probe_target(&origin).await
 }
 
 #[tauri::command]
@@ -110,6 +115,55 @@ pub async fn preview_style(
     let msg = serde_json::json!({
         "type": "preview_style",
         "payload": { "property": property, "value": value }
+    });
+    state
+        .to_agent_tx
+        .send(msg.to_string())
+        .map_err(|_| "no agent connected".to_string())?;
+    Ok(())
+}
+
+/// Asks the page for the computed styles of specific elements, so a
+/// multi-element edit can be verified element by element.
+#[tauri::command]
+pub async fn capture_elements(
+    paths: Vec<String>,
+    state: State<'_, Arc<WsState>>,
+) -> Result<(), String> {
+    let msg = serde_json::json!({
+        "type": "capture_elements",
+        "payload": { "paths": paths }
+    });
+    state
+        .to_agent_tx
+        .send(msg.to_string())
+        .map_err(|_| "no agent connected".to_string())?;
+    Ok(())
+}
+
+/// Asks the page to reload before verification, so the captured styles come
+/// from the edited source instead of the live inline previews.
+#[tauri::command]
+pub async fn verify_reload(state: State<'_, Arc<WsState>>) -> Result<(), String> {
+    let msg = serde_json::json!({ "type": "verify_reload" });
+    state
+        .to_agent_tx
+        .send(msg.to_string())
+        .map_err(|_| "no agent connected".to_string())?;
+    Ok(())
+}
+
+/// Switches how dragging behaves in the page: "snap" slots the element between
+/// its siblings, "free" leaves it where it is dropped.
+#[tauri::command]
+pub async fn set_drag_mode(
+    mode: String,
+    state: State<'_, Arc<WsState>>,
+) -> Result<(), String> {
+    let mode = if mode == "free" { "free" } else { "snap" };
+    let msg = serde_json::json!({
+        "type": "set_drag_mode",
+        "payload": { "mode": mode }
     });
     state
         .to_agent_tx

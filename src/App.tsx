@@ -2,34 +2,39 @@ import { useState, useCallback, useEffect, useRef, type JSX } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { EditorShell } from "@/components/editor/editor-shell.js";
 import { ElementIdentity } from "@/components/editor/element-identity.js";
-import { PanelTabs, type PanelKey } from "@/components/editor/panel-tabs.js";
+import { Inspector } from "@/components/editor/inspector.js";
 import { LayersPanel, type DomNode } from "@/components/editor/layers-panel.js";
-import { CodeBox } from "@/components/editor/code-box.js";
 import { ProgressMarker } from "@/components/editor/progress-marker.js";
 import { AIInput } from "@/components/editor/ai-input.js";
 import { ApplyBar } from "@/components/editor/apply-bar.js";
 import { ApprovalToast } from "@/components/toast/approval-toast.js";
-import {
-  ColorsPanel, SpacingPanel, TypographyPanel,
-  BorderPanel, LayoutPanel, EffectsPanel,
-} from "@/components/editor/panels/index.js";
 import { SetupScreen } from "@/components/setup-screen.js";
 import { LicenseGate } from "@/components/license-gate.js";
 import { useSession } from "@/hooks/useSession.js";
 import { useTargetOrigin } from "@/hooks/useTargetOrigin.js";
-import { useAgentConnection, type AgentSnapshot } from "@/hooks/useAgentConnection.js";
+import {
+  useAgentConnection,
+  useGestureChanges,
+  type AgentSnapshot,
+} from "@/hooks/useAgentConnection.js";
 import { useApplyFlow } from "@/hooks/useApplyFlow.js";
 import { useLicense } from "@/hooks/useLicense.js";
 import { useUpdater } from "@/hooks/useUpdater.js";
 import { UpdateBanner } from "@/components/update-banner.js";
-import { StateSelector } from "@/components/editor/state-selector.js";
 import { usePseudoState } from "@/hooks/usePseudoState.js";
 
 type AppMode = "setup" | "editing";
 type OverridesByState = Record<string, Record<string, Record<string, string>>>;
 
+/**
+ * Identity of the edited element. `dom_path` matches one node and one only —
+ * without it, every card sharing a class collapses into a single bucket, so
+ * edits to different instances overwrite each other and the snapshot cached for
+ * the first one is used for all.
+ */
 function buildElementKey(snap: AgentSnapshot): string {
   const el = snap.element;
+  if (el.dom_path) return el.dom_path;
   const parts = [el.tag];
   if (el.id) parts.push(`#${el.id}`);
   if (el.classes.length) parts.push(`.${el.classes.join(".")}`);
@@ -46,7 +51,7 @@ export function App(): JSX.Element | null {
   const flow = useApplyFlow(session?.token ?? "", license.canApply());
 
   const [mode, setMode] = useState<AppMode>("setup");
-  const [active, setActive] = useState<PanelKey>("colors");
+  const [freeEdit, setFreeEdit] = useState(false);
   const [allOverrides, setAllOverrides] = useState<OverridesByState>({});
   const [snapshotCache, setSnapshotCache] = useState<Record<string, AgentSnapshot>>({});
   const [inputKey, setInputKey] = useState(0);
@@ -87,7 +92,7 @@ export function App(): JSX.Element | null {
   }, [agent]);
 
   const handleChange = useCallback(
-    (prop: string, value: string) => {
+    (prop: string, value: string, options?: { preview?: boolean }) => {
       if (!elementKey) return;
       const ps = pseudo.activeState;
       setAllOverrides((prev) => {
@@ -100,6 +105,9 @@ export function App(): JSX.Element | null {
           },
         };
       });
+      // Drags already applied their effect in the page; echoing a preview back
+      // would move the element a second time.
+      if (options?.preview === false) return;
       if (ps === "default") {
         agent.previewStyle(prop, value);
       } else {
@@ -108,6 +116,20 @@ export function App(): JSX.Element | null {
     },
     [agent, elementKey, pseudo.activeState],
   );
+
+  useGestureChanges((ev) => {
+    for (const change of ev.changes) {
+      handleChange(change.property, change.value, { preview: false });
+    }
+  }, mode === "editing");
+
+  const handleToggleFreeEdit = useCallback(() => {
+    setFreeEdit((prev) => {
+      const next = !prev;
+      void agent.setDragMode(next ? "free" : "snap").catch(() => {});
+      return next;
+    });
+  }, [agent]);
 
   const handleApply = useCallback(() => {
     if (!agent.snapshot) return;
@@ -140,6 +162,7 @@ export function App(): JSX.Element | null {
           agentConnected={agent.connected}
           onConnect={target.connect}
           onReady={handleReady}
+          onCancel={target.reset}
           error={target.error}
           loading={target.loading}
           targetOrigin={target.origin}
@@ -172,20 +195,21 @@ export function App(): JSX.Element | null {
         />
       }
       identity={<ElementIdentity element={snap?.element ?? null} />}
-      tabs={<PanelTabs active={active} onSelect={setActive} />}
-      stateSelector={
-        <StateSelector
-          availableStates={pseudo.availableStates}
-          active={pseudo.activeState}
-          onSelect={pseudo.setActiveState}
-        />
-      }
-      panel={renderPanel(active, pseudo.mergedValues, handleChange)}
-      codeBox={
-        <CodeBox
-          source={sourceSnippet}
-          file={snap?.element.source_file ?? ""}
-          line={snap?.element.source_line ?? 0}
+      inspector={
+        <Inspector
+          element={snap?.element ?? null}
+          values={pseudo.mergedValues}
+          onChange={handleChange}
+          pseudo={{
+            availableStates: pseudo.availableStates,
+            activeState: pseudo.activeState,
+            setActiveState: pseudo.setActiveState,
+          }}
+          code={{
+            source: sourceSnippet,
+            file: snap?.element.source_file ?? "",
+            line: snap?.element.source_line ?? 0,
+          }}
         />
       }
       progress={
@@ -218,10 +242,13 @@ export function App(): JSX.Element | null {
           commitHash={flow.commitHash}
           error={flow.error}
           expressMode={flow.expressMode}
+          freeEdit={freeEdit}
+          verification={flow.verification}
           canApply={license.canApply()}
           canUseExpress={license.canUseExpress()}
           editsUsed={license.rateLimit?.edits_used}
           editsLimit={license.rateLimit?.edits_limit}
+          onToggleFreeEdit={handleToggleFreeEdit}
           onApply={handleApply}
           onRevert={flow.revert}
           onToggleExpress={flow.toggleExpress}
@@ -239,25 +266,4 @@ export function App(): JSX.Element | null {
       }
     />
   );
-}
-
-function renderPanel(
-  key: PanelKey,
-  values: Record<string, string>,
-  onChange: (prop: string, value: string) => void,
-): JSX.Element {
-  switch (key) {
-    case "colors":
-      return <ColorsPanel values={values} onChange={onChange} />;
-    case "spacing":
-      return <SpacingPanel values={values} onChange={onChange} />;
-    case "typography":
-      return <TypographyPanel values={values} onChange={onChange} />;
-    case "borders":
-      return <BorderPanel values={values} onChange={onChange} />;
-    case "layout":
-      return <LayoutPanel values={values} onChange={onChange} />;
-    case "effects":
-      return <EffectsPanel values={values} onChange={onChange} />;
-  }
 }

@@ -3,6 +3,14 @@ export interface CapturedRule {
   source_file: string;
   rule_text: string;
   line_number: number;
+  /**
+   * How many elements in the document this rule styles. Above 1 the rule is
+   * shared, and editing it moves every one of them — the AI has to scope the
+   * change to the instance instead.
+   */
+  match_count: number;
+  /** Rough CSS specificity, used to send the rule that actually wins. */
+  specificity: number;
 }
 
 export interface CapturedStyling {
@@ -27,7 +35,10 @@ export interface CapturedStyling {
  * @returns A relative path, the original href, or "<inline>".
  */
 export function normalizeSheetSource(href: string | null): string {
-  if (!href) return "<inline>";
+  // An inline <style> lives in the document itself, so name that document —
+  // "<inline>" is not a file the AI can open, and it used to send it hunting
+  // through the project with a grep instead.
+  if (!href) return currentDocumentPath();
   try {
     const url = new URL(href, location.href);
     if (url.origin === location.origin) {
@@ -37,6 +48,36 @@ export function normalizeSheetSource(href: string | null): string {
   } catch {
     return href;
   }
+}
+
+/** The served path of the current document, e.g. "index.html". */
+export function currentDocumentPath(): string {
+  const path = location.pathname.replace(/^\//, "");
+  if (!path || path.endsWith("/")) return `${path}index.html`;
+  // Extension-less routes are rendered by a component, not a static file; the
+  // document path is still the best anchor available.
+  return path;
+}
+
+/** Counts how many elements the rule applies to, so shared rules are visible. */
+function countMatches(selector: string): number {
+  try {
+    return document.querySelectorAll(selector).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Approximate CSS specificity: ids ×100, classes/attributes/pseudo-classes ×10,
+ * elements ×1. Enough to rank which of several matching rules wins.
+ */
+export function specificityOf(selector: string): number {
+  const first = selector.split(",")[0] ?? selector;
+  const ids = (first.match(/#[\w-]+/g) ?? []).length;
+  const classes = (first.match(/\.[\w-]+|\[[^\]]+\]|:[a-z-]+(?![a-z-]*\()/gi) ?? []).length;
+  const tags = (first.match(/(^|[\s>+~])[a-z][\w-]*/gi) ?? []).length;
+  return ids * 100 + classes * 10 + tags;
 }
 
 export function captureComputedStyle(el: Element): Record<string, string> {
@@ -69,6 +110,8 @@ export function captureMatchingRules(el: Element): CapturedRule[] {
             source_file: normalizeSheetSource(sheet.href),
             rule_text: rule.cssText,
             line_number: 0,
+            match_count: countMatches(rule.selectorText),
+            specificity: specificityOf(rule.selectorText),
           });
         }
       } catch {

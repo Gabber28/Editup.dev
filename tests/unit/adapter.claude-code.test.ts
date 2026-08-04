@@ -37,6 +37,43 @@ const CONTENT_ARRAY_RESPONSE = JSON.stringify({
   usage: { input_tokens: 500, output_tokens: 200 },
 });
 
+/** A stream-json run that really edited the planned file. */
+const EXECUTE_STREAM = [
+  JSON.stringify({
+    type: "assistant",
+    message: {
+      content: [
+        {
+          type: "tool_use",
+          id: "t1",
+          name: "Edit",
+          input: { file_path: "/home/user/project/src/components/Button.tsx" },
+        },
+      ],
+    },
+  }),
+  JSON.stringify({
+    type: "user",
+    message: { content: [{ type: "tool_result", tool_use_id: "t1", is_error: false }] },
+  }),
+  JSON.stringify({
+    type: "result",
+    subtype: "success",
+    is_error: false,
+    result: "edited the button",
+    usage: { input_tokens: 1000, output_tokens: 350 },
+  }),
+].join("\n");
+
+/** A run that talked but never used an edit tool. */
+const EXECUTE_STREAM_NO_EDITS = JSON.stringify({
+  type: "result",
+  subtype: "success",
+  is_error: false,
+  result: "I could not find the file",
+  usage: { input_tokens: 10, output_tokens: 5 },
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -119,7 +156,7 @@ describe("ClaudeCodeAdapter.plan()", () => {
 describe("ClaudeCodeAdapter.execute()", () => {
   it("builds args with Edit in allowedTools", async () => {
     spawnSafeMock.mockResolvedValue({
-      exitCode: 0, stdout: VALID_PLAN_WITH_USAGE, stderr: "", durationMs: 800,
+      exitCode: 0, stdout: EXECUTE_STREAM, stderr: "", durationMs: 800,
     });
     const adapter = new ClaudeCodeAdapter();
     const plan = makePlan();
@@ -132,7 +169,7 @@ describe("ClaudeCodeAdapter.execute()", () => {
 
   it("includes --max-turns 15 for execute", async () => {
     spawnSafeMock.mockResolvedValue({
-      exitCode: 0, stdout: VALID_PLAN_WITH_USAGE, stderr: "", durationMs: 800,
+      exitCode: 0, stdout: EXECUTE_STREAM, stderr: "", durationMs: 800,
     });
     const adapter = new ClaudeCodeAdapter();
     await adapter.execute(makePlan(), makeSnapshot(), makeContext());
@@ -142,21 +179,88 @@ describe("ClaudeCodeAdapter.execute()", () => {
     expect(args[turnsIdx + 1]).toBe("15");
   });
 
-  it("returns files_modified from plan", async () => {
+  it("asks for the stream format that carries per-tool evidence", async () => {
     spawnSafeMock.mockResolvedValue({
-      exitCode: 0, stdout: VALID_PLAN_WITH_USAGE, stderr: "", durationMs: 800,
+      exitCode: 0, stdout: EXECUTE_STREAM, stderr: "", durationMs: 800,
     });
     const adapter = new ClaudeCodeAdapter();
-    const plan = makePlan();
-    const result = await adapter.execute(plan, makeSnapshot(), makeContext());
-    expect(result.files_modified).toEqual(
-      plan.files.map((f) => f.path)
-    );
+    await adapter.execute(makePlan(), makeSnapshot(), makeContext());
+
+    const args: string[] = spawnSafeMock.mock.calls[0][0].args;
+    const fmtIdx = args.indexOf("--output-format");
+    expect(args[fmtIdx + 1]).toBe("stream-json");
+    expect(args).toContain("--verbose");
   });
 
-  it("parses token usage from stdout", async () => {
+  it("reports the files the run actually edited, relative to the project root", async () => {
     spawnSafeMock.mockResolvedValue({
-      exitCode: 0, stdout: VALID_PLAN_WITH_USAGE, stderr: "", durationMs: 800,
+      exitCode: 0, stdout: EXECUTE_STREAM, stderr: "", durationMs: 800,
+    });
+    const adapter = new ClaudeCodeAdapter();
+    const result = await adapter.execute(makePlan(), makeSnapshot(), makeContext());
+    expect(result.files_modified).toEqual(["src/components/Button.tsx"]);
+    expect(result.files_extra).toEqual([]);
+  });
+
+  it("flags files edited beyond the plan as extras", async () => {
+    const stream = EXECUTE_STREAM.replace(
+      "src/components/Button.tsx",
+      "src/styles.css",
+    );
+    spawnSafeMock.mockResolvedValue({
+      exitCode: 0, stdout: stream, stderr: "", durationMs: 800,
+    });
+    const adapter = new ClaudeCodeAdapter();
+    const result = await adapter.execute(makePlan(), makeSnapshot(), makeContext());
+    expect(result.files_extra).toEqual(["src/styles.css"]);
+  });
+
+  it("fails when the run edited nothing, instead of reporting success", async () => {
+    spawnSafeMock.mockResolvedValue({
+      exitCode: 0, stdout: EXECUTE_STREAM_NO_EDITS, stderr: "", durationMs: 800,
+    });
+    const adapter = new ClaudeCodeAdapter();
+    await expect(
+      adapter.execute(makePlan(), makeSnapshot(), makeContext())
+    ).rejects.toThrow(/edited no files/);
+  });
+
+  it("fails when the edit tool was denied, despite exit code 0", async () => {
+    const denied = JSON.stringify({
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      result: "blocked",
+      permission_denials: [{ tool_name: "Edit" }],
+    });
+    spawnSafeMock.mockResolvedValue({
+      exitCode: 0, stdout: denied, stderr: "", durationMs: 800,
+    });
+    const adapter = new ClaudeCodeAdapter();
+    await expect(
+      adapter.execute(makePlan(), makeSnapshot(), makeContext())
+    ).rejects.toThrow(/denied/);
+  });
+
+  it("fails when the CLI itself flags the run as errored", async () => {
+    const errored = JSON.stringify({
+      type: "result",
+      subtype: "error_max_turns",
+      is_error: true,
+      result: "ran out of turns",
+    });
+    spawnSafeMock.mockResolvedValue({
+      exitCode: 0, stdout: errored, stderr: "", durationMs: 800,
+    });
+    const adapter = new ClaudeCodeAdapter();
+    await expect(
+      adapter.execute(makePlan(), makeSnapshot(), makeContext())
+    ).rejects.toThrow(/error_max_turns/);
+  });
+
+  it("parses token usage from the stream", async () => {
+    spawnSafeMock.mockResolvedValue({
+      exitCode: 0, stdout: EXECUTE_STREAM, stderr: "", durationMs: 800,
     });
     const adapter = new ClaudeCodeAdapter();
     const result = await adapter.execute(
@@ -164,17 +268,6 @@ describe("ClaudeCodeAdapter.execute()", () => {
     );
     expect(result.token_usage.input_total).toBe(1000);
     expect(result.token_usage.output_total).toBe(350);
-  });
-
-  it("returns zero token usage on unparseable stdout", async () => {
-    spawnSafeMock.mockResolvedValue({
-      exitCode: 0, stdout: "not json at all", stderr: "", durationMs: 800,
-    });
-    const adapter = new ClaudeCodeAdapter();
-    const result = await adapter.execute(
-      makePlan(), makeSnapshot(), makeContext()
-    );
-    expect(result.token_usage).toEqual({ input_total: 0, output_total: 0 });
   });
 
   it("throws ExecuteFailedError on non-zero exit code", async () => {

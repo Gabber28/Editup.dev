@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import type { ElementInfo, PseudoStateRule } from "@/types/snapshot.js";
+import { listen } from "@tauri-apps/api/event";
+import type { ElementInfo, PseudoStateRule, MatchingRule } from "@/types/snapshot.js";
+
+/** A drag finished in the page; the effect is already applied there. */
+export interface GestureChangeEvent {
+  id: number;
+  changes: Array<{ property: string; value: string }>;
+}
+
+export type DragMode = "snap" | "free";
 
 export interface AgentSnapshot {
   element: ElementInfo;
@@ -8,16 +17,24 @@ export interface AgentSnapshot {
     framework: string;
     class_to_rule_map: Record<
       string,
-      { source_file: string; rule_text: string; line_number: number }
+      {
+        source_file: string;
+        rule_text: string;
+        line_number: number;
+        match_count?: number;
+      }
     >;
     active_css_variables: Record<
       string,
       { value: string; declared_in: string }
     >;
     pseudo_rules?: PseudoStateRule[];
+    matching_rules?: MatchingRule[];
   };
   computed_style: Record<string, string>;
   base_computed_style?: Record<string, string>;
+  /** True on the snapshot captured after a verification reload (no live previews). */
+  verification?: boolean;
 }
 
 export interface AgentConnection {
@@ -28,7 +45,44 @@ export interface AgentConnection {
   stopEditing: () => Promise<void>;
   previewStyle: (property: string, value: string) => Promise<void>;
   previewPseudoStyle: (property: string, value: string, pseudo: string) => Promise<void>;
+  setDragMode: (mode: DragMode) => Promise<void>;
   resetOverrides: () => Promise<void>;
+}
+
+/**
+ * Subscribes to drags finished in the page.
+ *
+ * @param onGesture Receives each gesture's changes, already applied in the page
+ * @param enabled Whether the agent connection is live
+ */
+export function useGestureChanges(
+  onGesture: (ev: GestureChangeEvent) => void,
+  enabled: boolean,
+): void {
+  const handlerRef = useRef(onGesture);
+  handlerRef.current = onGesture;
+
+  useEffect(() => {
+    if (!enabled) return;
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    let lastId = 0;
+
+    void listen<GestureChangeEvent>("agent_gesture_change", (ev) => {
+      const payload = ev.payload;
+      if (!payload || payload.id <= lastId) return;
+      lastId = payload.id;
+      handlerRef.current(payload);
+    }).then((fn) => {
+      if (disposed) fn();
+      else unlisten = fn;
+    });
+
+    return (): void => {
+      disposed = true;
+      if (unlisten) unlisten();
+    };
+  }, [enabled]);
 }
 
 export function useAgentConnection(enabled = false): AgentConnection {
@@ -86,6 +140,10 @@ export function useAgentConnection(enabled = false): AgentConnection {
     [],
   );
 
+  const setDragMode = useCallback(async (mode: DragMode) => {
+    await invoke("set_drag_mode", { mode });
+  }, []);
+
   const resetOverrides = useCallback(async () => {
     await invoke("reset_overrides");
   }, []);
@@ -98,6 +156,7 @@ export function useAgentConnection(enabled = false): AgentConnection {
     stopEditing,
     previewStyle,
     previewPseudoStyle,
+    setDragMode,
     resetOverrides,
   };
 }

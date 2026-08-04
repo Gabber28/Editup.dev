@@ -15,10 +15,16 @@ const SENSITIVE_FILE_PATTERNS = [
 export interface DiffAuditInput {
   plan: EditPlan;
   modifiedFiles: string[];
+  /**
+   * Whether git could list the working-tree changes. Without it there is no
+   * witness independent of the AI's own report, so the audit is not
+   * authoritative and must not claim an exact pass.
+   */
+  gitAvailable?: boolean;
 }
 
 export interface DiffAuditResult {
-  status: "pass_exact" | "pass_subset" | "warn_extras" | "fail";
+  status: "pass_exact" | "pass_subset" | "warn_extras" | "fail" | "no_git";
   expected: string[];
   actual: string[];
   missing: string[];
@@ -40,6 +46,10 @@ export function auditDiff(input: DiffAuditInput): DiffAuditResult {
   let status: DiffAuditResult["status"];
   if (missing.length > 0) {
     status = "fail";
+  } else if (input.gitAvailable === false) {
+    // Real mismatches above still surface; a clean comparison does not earn a
+    // pass when the only source of truth was the AI itself.
+    status = "no_git";
   } else if (extras.length === 0) {
     status = "pass_exact";
   } else if (sensitiveExtras.length > 0) {

@@ -6,6 +6,7 @@ export interface TargetOriginState {
   loading: boolean;
   error: string | null;
   connect: (url: string, proxyPort: number) => Promise<void>;
+  reset: () => void;
 }
 
 export function useTargetOrigin(): TargetOriginState {
@@ -17,6 +18,10 @@ export function useTargetOrigin(): TargetOriginState {
     setLoading(true);
     setError(null);
     try {
+      // Confirm a dev server is actually listening before committing to this
+      // origin. Without this, an unreachable port sets the target anyway and
+      // the setup screen spins on "waiting for agent" forever.
+      await invoke("check_target_reachable", { origin: url });
       await invoke("set_target_origin", { origin: url });
       setOrigin(url);
       await invoke("open_in_browser", {
@@ -24,10 +29,17 @@ export function useTargetOrigin(): TargetOriginState {
       });
     } catch (err: unknown) {
       setError(String(err));
+      setOrigin(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  return { origin, loading, error, connect };
+  const reset = useCallback(() => {
+    setOrigin(null);
+    setError(null);
+    setLoading(false);
+  }, []);
+
+  return { origin, loading, error, connect, reset };
 }

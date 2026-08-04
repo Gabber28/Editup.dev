@@ -3,9 +3,25 @@ import type { EnrichedSnapshot, CSSChange } from "@/types/snapshot.js";
 const PIXEL_TOLERANCE = 5;
 const RGB_CHANNEL_TOLERANCE = 15;
 
+/** Properties whose computed value is re-normalized by the browser, making a
+ * strict string comparison unreliable (gradients, background shorthands, urls). */
+const GRADIENT_PRONE_PROPS = new Set([
+  "background-image",
+  "background",
+  "background-clip",
+  "-webkit-background-clip",
+  "-webkit-text-fill-color",
+]);
+
 export interface VisualCheckInput {
   snapshot: EnrichedSnapshot;
   postEditComputed: Record<string, string>;
+  /**
+   * Post-edit computed styles of the other edited elements, keyed by dom_path.
+   * Without these, every change on a non-primary element was skipped — which is
+   * most of a multi-element edit.
+   */
+  elementStyles?: Record<string, Record<string, string>>;
 }
 
 export interface VisualCheckResult {
@@ -17,7 +33,20 @@ export interface VisualCheckResult {
     expected: string;
     actual: string;
     reason: string;
+    /** Which element diverged, for the warning shown to the developer. */
+    element?: string;
   }>;
+}
+
+/** Readable identity of the element a change targeted. */
+function describeTarget(
+  snapshot: EnrichedSnapshot,
+  change: CSSChange
+): string {
+  const ref = change.element_ref;
+  const tag = ref?.tag ?? snapshot.element.tag;
+  const classes = ref?.classes ?? snapshot.element.classes;
+  return classes.length > 0 ? `${tag}.${classes.join(".")}` : tag;
 }
 
 export function checkVisual(input: VisualCheckInput): VisualCheckResult {
@@ -25,20 +54,39 @@ export function checkVisual(input: VisualCheckInput): VisualCheckResult {
   let checked = 0;
 
   for (const change of input.snapshot.changes) {
-    // :hover/:focus/etc. values and changes on other elements never show up
-    // in the verified element's default computed style — comparing them
-    // produces false failures and triggers bogus correction passes.
-    if (change.pseudo_state !== undefined || change.element_ref !== undefined) {
+    // :hover/:focus/etc. never show up in a default computed style.
+    if (change.pseudo_state !== undefined) continue;
+
+    // A change on another element is checked against THAT element's styles.
+    // Skipping them, as this did, left multi-element edits unverified.
+    const refPath = change.element_ref?.dom_path;
+    const styles = change.element_ref
+      ? refPath
+        ? input.elementStyles?.[refPath]
+        : undefined
+      : input.postEditComputed;
+    if (!styles) continue;
+    // Media/icon swaps (src attribute, __text__, __class__, __use_href__,
+    // __svg_inner__) are not CSS properties, so getComputedStyle has nothing
+    // to compare — skip them here (they get light verification via git diff).
+    if (change.property === "src" || change.property.startsWith("__")) {
+      continue;
+    }
+    // Gradient/background/url values are re-normalized by the browser (colors
+    // → rgb(), relative URLs → absolute, keyword angles → deg), so a strict
+    // string compare false-fails and triggers a bogus correction pass.
+    if (GRADIENT_PRONE_PROPS.has(change.property)) {
       continue;
     }
     checked++;
-    const actual = input.postEditComputed[change.property];
+    const actual = styles[change.property];
     if (actual === undefined) {
       divergences.push({
         property: change.property,
         expected: change.expected_final_computed,
         actual: "<missing>",
         reason: "property absent from post-edit computed style",
+        element: describeTarget(input.snapshot, change),
       });
       continue;
     }
@@ -50,6 +98,7 @@ export function checkVisual(input: VisualCheckInput): VisualCheckResult {
           expected: "(any change)",
           actual,
           reason: "text instruction change: value unchanged",
+          element: describeTarget(input.snapshot, change),
         });
       }
       continue;
@@ -66,6 +115,7 @@ export function checkVisual(input: VisualCheckInput): VisualCheckResult {
         expected: change.expected_final_computed,
         actual,
         reason: result.reason,
+        element: describeTarget(input.snapshot, change),
       });
     }
   }

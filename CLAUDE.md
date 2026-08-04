@@ -34,7 +34,9 @@ editup.dev/
 │   │       ├── editor-shell.tsx      # Container principal, detecta width (wide/medium/narrow)
 │   │       ├── element-identity.tsx  # Barra de identidade + breadcrumb + mini-preview
 │   │       ├── layers-panel.tsx      # Árvore DOM, seleção, marcadores de editado
-│   │       ├── panel-tabs.tsx        # Tabs dos painéis (ícone+texto ou ícone only)
+│   │       ├── inspector.tsx         # Inspetor rolável único (empilha seções contextuais)
+│   │       ├── sections.tsx          # Registry de seções (ordem + aplicabilidade)
+│   │       ├── section-group.tsx     # Seção colapsável (estado persistido por id)
 │   │       ├── panels/
 │   │       │   ├── color-panel.tsx
 │   │       │   ├── spacing-panel.tsx
@@ -146,30 +148,32 @@ Na janela do EditUp:
 - **Barra de identidade:** tag + classe principal + arquivo:linha + mini-preview do elemento
 - **Breadcrumb DOM:** `body > main > section > div > button` (clicável — troca seleção ao clicar em ancestral)
 
-## Layout do editor — 3 modos adaptativos
+## Layout do editor — inspetor único rolável (estilo Figma/Webflow)
 
-O editor se adapta à largura da janela com 3 modos:
+O editor NÃO usa mais abas. As ferramentas de edição são um **inspetor rolável único** (`inspector.tsx`) com seções **empilhadas e colapsáveis** (`section-group.tsx`), exibidas **contextualmente** conforme o elemento selecionado. As seções vêm de um **registry declarativo** (`sections.tsx`) que é a fonte única de ordem + aplicabilidade.
 
-### Wide (>900px) — tela cheia ou metade grande
+### Ordem e agrupamento (fixos)
 
-Layers panel à esquerda (200px) | Tabs de painéis + code box à direita | Progress marker | AI input na parte inferior.
+**Universais (sempre):** Layout → Spacing → Effects → Colors → Borders. Colors é ocultado em elementos de mídia substituída (`img/video/iframe/canvas/embed/object`).
+**Contextuais (só quando aplicável):** Typography (quando `element.has_text`) · Image (quando `media.kind ≠ "none"`).
+**Interação (por último):** Link.
 
-### Medium (500-900px) — metade da tela
+O `StateSelector` (default/:hover/:focus…) fica no topo do inspetor (global). O `CodeBox` vira a seção "Source" ao final. Cada seção persiste seu estado aberto/recolhido por id em `localStorage` (`editup.section.<id>`).
 
-Layers vira dropdown no topo. Code box colapsa para 1 linha. Tabs de painéis em linha horizontal.
+### 3 modos adaptativos (largura)
 
-### Narrow (<500px) — quarter snap ou sidebar strip
+- **Wide (>900px):** Layers panel à esquerda (200px) + inspetor à direita.
+- **Medium (500-900px) / Narrow (<500px):** Layers oculto; o inspetor ocupa a largura toda. Sempre a mesma pilha rolável.
 
-Identity compacta (1 linha). Tabs com ícones only. Code box escondido (toggle). AI input sempre visível no bottom.
-
-Todos os limites de painel são arrastáveis. Preferências são persistidas por size-class. Tauri window config: `min_width: 280`, `min_height: 400`.
+Apenas o inspetor rola; identity fica fixo no topo e progress + AI input + Apply bar ficam fixos no rodapé (sempre visíveis). Tauri window config: `min_width: 280`, `min_height: 400`.
 
 ### Componentes do editor
 
 - **Element identity:** tag, classe, source file:line, mini-preview (cloneNode + computed styles)
 - **Layers panel:** árvore DOM hierárquica, marcadores visuais nos elementos já editados
-- **Panel tabs:** 6 painéis — Cores, Espaçamento, Tipografia, Bordas, Layout, Efeitos
-- **Code box:** snippet read-only do source do elemento (syntax highlighted, colapsável)
+- **Inspector:** seções colapsáveis contextuais (registry em `sections.tsx`), universais primeiro
+- **Section group:** cabeçalho + chevron, estado persistido por seção
+- **Code box:** snippet read-only do source do elemento (seção "Source")
 - **Progress marker:** dots horizontais mostrando quais elementos da seção já foram editados
 - **AI input:** caixa de texto para instruções em linguagem natural (sempre visível)
 

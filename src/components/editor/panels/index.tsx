@@ -4,3 +4,6 @@ export { TypographyPanel } from "./typography-panel.js";
 export { BorderPanel } from "./border-panel.js";
 export { LayoutPanel } from "./layout-panel.js";
 export { EffectsPanel } from "./effects-panel.js";
+export { ImagePanel } from "./image-panel.js";
+export { LinkPanel } from "./link-panel.js";
+export { PositionControls } from "./position-controls.js";

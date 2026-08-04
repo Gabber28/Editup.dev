@@ -5,10 +5,7 @@ export interface EditorShellProps {
   banner?: ReactNode;
   layers: ReactNode;
   identity: ReactNode;
-  tabs: ReactNode;
-  stateSelector?: ReactNode;
-  panel: ReactNode;
-  codeBox: ReactNode;
+  inspector: ReactNode;
   progress: ReactNode;
   aiInput: ReactNode;
   applyBar: ReactNode;
@@ -26,13 +23,12 @@ export function EditorShell(props: EditorShellProps): JSX.Element {
         )}
         <main className="editor-main">
           {props.identity}
-          {props.tabs}
-          {props.stateSelector}
-          <div className="panel-content">{props.panel}</div>
-          {mode !== "narrow" && props.codeBox}
-          {props.progress}
-          {props.aiInput}
-          {props.applyBar}
+          {props.inspector}
+          <div className="editor-footer">
+            {props.progress}
+            {props.aiInput}
+            {props.applyBar}
+          </div>
         </main>
       </div>
       {props.toast}

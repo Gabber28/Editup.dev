@@ -1,6 +1,8 @@
 import type { JSX } from "react";
 import type { OrchestratorPhase } from "@bridge/orchestrator.js";
 import type { ApplyError } from "@/hooks/useApplyFlow.js";
+import type { VerificationResult } from "@/types/execute.js";
+import { hasVerificationWarnings } from "@/types/execute.js";
 
 export interface ApplyBarProps {
   phase: OrchestratorPhase;
@@ -12,9 +14,14 @@ export interface ApplyBarProps {
   editsLimit?: number | undefined;
   canApply: boolean;
   canUseExpress: boolean;
+  /** Drag drops the element where released instead of snapping between siblings. */
+  freeEdit: boolean;
+  /** Post-apply checks; drives the warning shown when fidelity was not proven. */
+  verification?: VerificationResult | null;
   onApply(): void;
   onRevert(): void;
   onToggleExpress(): void;
+  onToggleFreeEdit(): void;
   onReset(): void;
 }
 
@@ -51,6 +58,49 @@ function applyLabel(canApply: boolean, hasChanges: boolean, editsLimit?: number)
   return "Apply";
 }
 
+const CHECK_LABELS: Record<string, string> = {
+  unverified: "the page could not be checked after the edit",
+  fail: "the applied values do not match what you set",
+  no_git: "no git repository here, so the file audit had no witness",
+};
+
+/**
+ * States plainly what could not be proven and which element diverged, instead
+ * of showing a green "Applied" the run did not earn.
+ */
+function VerificationWarning(props: { verification: VerificationResult }): JSX.Element {
+  const { verification: v } = props;
+  const reasons = [
+    v.visual_check === "unverified" || v.visual_check === "fail"
+      ? CHECK_LABELS[v.visual_check]
+      : null,
+    v.diff_check === "no_git" ? CHECK_LABELS["no_git"] : null,
+    v.scope_check === "fail" ? "the change leaked to other elements" : null,
+  ].filter(Boolean);
+
+  return (
+    <div className="apply-bar__error-detail">
+      <span className="apply-bar__error-title">Applied, but not verified</span>
+      {reasons.map((r) => (
+        <span key={r} className="apply-bar__error-msg">
+          {r}
+        </span>
+      ))}
+      {(v.divergences ?? []).slice(0, 4).map((d) => (
+        <span key={`${d.element}-${d.property}`} className="apply-bar__error-hint">
+          {d.element} · {d.property}: expected {d.expected}, got {d.actual}
+        </span>
+      ))}
+      {v.correction_attempts > 0 && (
+        <span className="apply-bar__error-hint">
+          {v.correction_attempts} correction attempt
+          {v.correction_attempts === 1 ? "" : "s"} did not close the gap
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function ApplyBar(props: ApplyBarProps): JSX.Element {
   const { phase, hasChanges, commitHash, error, canApply, canUseExpress } = props;
   const busy = phase === "planning" || phase === "executing" || phase === "verifying";
@@ -78,18 +128,27 @@ export function ApplyBar(props: ApplyBarProps): JSX.Element {
     );
   }
 
-  if (phase === "completed" && commitHash) {
+  if (phase === "completed") {
+    const warn = hasVerificationWarnings(props.verification ?? null);
     return (
-      <div className="apply-bar apply-bar--done">
-        <span className="apply-bar__msg">
-          Applied ({commitHash})
-        </span>
-        <button type="button" className="apply-bar__btn" onClick={props.onRevert}>
-          Revert
-        </button>
-        <button type="button" className="apply-bar__btn" onClick={props.onReset}>
-          Done
-        </button>
+      <div className={`apply-bar ${warn ? "apply-bar--warn" : "apply-bar--done"}`}>
+        {warn ? (
+          <VerificationWarning verification={props.verification as VerificationResult} />
+        ) : (
+          <span className="apply-bar__msg">
+            Applied{commitHash ? ` (${commitHash})` : ""}
+          </span>
+        )}
+        <div className="apply-bar__error-actions">
+          {commitHash && (
+            <button type="button" className="apply-bar__btn" onClick={props.onRevert}>
+              Revert
+            </button>
+          )}
+          <button type="button" className="apply-bar__btn" onClick={props.onReset}>
+            Done
+          </button>
+        </div>
       </div>
     );
   }
@@ -124,6 +183,21 @@ export function ApplyBar(props: ApplyBarProps): JSX.Element {
           {props.editsUsed}/{props.editsLimit} edits
         </span>
       )}
+      <button
+        type="button"
+        className={`apply-bar__btn apply-bar__btn--mode${
+          props.freeEdit ? " apply-bar__btn--mode-on" : ""
+        }`}
+        aria-pressed={props.freeEdit}
+        title={
+          props.freeEdit
+            ? "Free edit: dragging drops the element where you release it"
+            : "Snap: dragging slots the element between its siblings"
+        }
+        onClick={props.onToggleFreeEdit}
+      >
+        Free edit
+      </button>
       <button
         type="button"
         className="apply-bar__btn apply-bar__btn--primary"

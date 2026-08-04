@@ -7,6 +7,8 @@ import { buildPlanPrompt, buildExecutePrompt } from "@bridge/prompt.js";
 import { extractEditPlanFromText } from "@bridge/edit-plan.js";
 import { PlanFailedError, ExecuteFailedError } from "@/lib/errors.js";
 import { logger } from "@/lib/logger.js";
+import { parseClaudeOutput } from "./claude-stream.js";
+import { toProjectRelative, normalizePath } from "./project-paths.js";
 
 const PLAN_ALLOWED_TOOLS = "Read,Glob,Grep";
 const EXECUTE_ALLOWED_TOOLS = "Read,Glob,Grep,Edit";
@@ -69,8 +71,14 @@ export class ClaudeCodeAdapter implements AIAdapter {
       );
     }
 
-    const responseText = extractClaudeResponseText(result.stdout);
-    return extractEditPlanFromText(responseText);
+    const outcome = parseClaudeOutput(result.stdout);
+    if (outcome.isError) {
+      throw new PlanFailedError(
+        `claude-code plan reported a failed run (${outcome.subtype || "unknown"})`,
+        1
+      );
+    }
+    return extractEditPlanFromText(outcome.text);
   }
 
   async execute(
@@ -93,8 +101,11 @@ export class ClaudeCodeAdapter implements AIAdapter {
       EXECUTE_ALLOWED_TOOLS,
       "--add-dir",
       context.projectRoot,
+      // stream-json is the only format carrying per-tool records, which is how
+      // we learn which files were really written instead of assuming the plan.
       "--output-format",
-      "json",
+      "stream-json",
+      "--verbose",
       "--max-turns",
       "15",
     ];
@@ -117,14 +128,36 @@ export class ClaudeCodeAdapter implements AIAdapter {
       );
     }
 
-    const usage = parseClaudeUsage(result.stdout);
+    const outcome = parseClaudeOutput(result.stdout);
+
+    // A denied Edit tool still exits 0, so the exit code alone proves nothing.
+    if (outcome.isError) {
+      throw new ExecuteFailedError(
+        `claude-code reported a failed run (${outcome.subtype || "unknown"})`
+      );
+    }
+    if (outcome.permissionDenials.length > 0) {
+      throw new ExecuteFailedError(
+        `claude-code was denied the tools it needed: ${outcome.permissionDenials.join(", ")}`
+      );
+    }
+    if (outcome.filesEdited.length === 0) {
+      throw new ExecuteFailedError(
+        "claude-code edited no files — the changes were not applied"
+      );
+    }
+
+    const modified = outcome.filesEdited.map((f) =>
+      toProjectRelative(f, context.projectRoot)
+    );
+    const planned = new Set(plan.files.map((f) => normalizePath(f.path)));
 
     return {
-      files_modified: plan.files.map((f) => f.path),
-      files_extra: [],
+      files_modified: modified,
+      files_extra: modified.filter((f) => !planned.has(normalizePath(f))),
       duration_ms: Date.now() - start,
       model: context.model ?? DEFAULT_MODEL,
-      token_usage: usage,
+      token_usage: outcome.usage,
     };
   }
 
@@ -133,38 +166,3 @@ export class ClaudeCodeAdapter implements AIAdapter {
   }
 }
 
-function extractClaudeResponseText(stdout: string): string {
-  try {
-    const parsed = JSON.parse(stdout) as {
-      result?: string;
-      content?: Array<{ text?: string }>;
-    };
-    if (typeof parsed.result === "string") return parsed.result;
-    if (Array.isArray(parsed.content)) {
-      return parsed.content
-        .map((c) => c.text ?? "")
-        .filter(Boolean)
-        .join("\n");
-    }
-  } catch {
-    // fall through
-  }
-  return stdout;
-}
-
-function parseClaudeUsage(stdout: string): {
-  input_total: number;
-  output_total: number;
-} {
-  try {
-    const parsed = JSON.parse(stdout) as {
-      usage?: { input_tokens?: number; output_tokens?: number };
-    };
-    return {
-      input_total: parsed.usage?.input_tokens ?? 0,
-      output_total: parsed.usage?.output_tokens ?? 0,
-    };
-  } catch {
-    return { input_total: 0, output_total: 0 };
-  }
-}
