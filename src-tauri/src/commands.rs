@@ -127,12 +127,12 @@ pub async fn preview_style(
 /// multi-element edit can be verified element by element.
 #[tauri::command]
 pub async fn capture_elements(
-    paths: Vec<String>,
+    targets: Vec<serde_json::Value>,
     state: State<'_, Arc<WsState>>,
 ) -> Result<(), String> {
     let msg = serde_json::json!({
         "type": "capture_elements",
-        "payload": { "paths": paths }
+        "payload": { "targets": targets }
     });
     state
         .to_agent_tx

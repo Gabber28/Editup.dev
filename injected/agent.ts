@@ -3,7 +3,7 @@ import { buildSnapshotPayload } from "./snapshot-builder.js";
 import { PseudoPreviewManager } from "./pseudo-preview.js";
 import { lookupReactFiber } from "./source-map.js";
 import { DragController, type DragMode, type GestureChange } from "./drag.js";
-import { buildDomPath } from "./dom-path.js";
+import { buildDomPath, textPreview } from "./dom-path.js";
 import { captureComputedStyle } from "./style-capture.js";
 
 interface AgentConfig {
@@ -20,6 +20,62 @@ interface AgentMessage {
 /** Marks the reload requested for verification, so the snapshot after it is tagged. */
 const VERIFY_FLAG = "__editup_verify__";
 
+/** Reads and clears the verification marker, so it never leaks into later loads. */
+function consumeVerifyFlag(): boolean {
+  const present = sessionStorage.getItem(VERIFY_FLAG) !== null;
+  if (present) sessionStorage.removeItem(VERIFY_FLAG);
+  return present;
+}
+
+/** How the app asks for an element after the page was rebuilt from source. */
+interface VerificationTarget {
+  path: string;
+  tag?: string;
+  classes?: string[];
+  text?: string;
+}
+
+/** True when the element still looks like the one the path was recorded for. */
+function matchesDescriptor(el: Element, target: VerificationTarget): boolean {
+  if (target.tag && el.tagName.toLowerCase() !== target.tag) return false;
+  // Text is not checked: an edit may legitimately rewrite it.
+  return (target.classes ?? []).every((c) => el.classList.contains(c));
+}
+
+/**
+ * Finds an element after the edit. A positional path goes stale whenever the
+ * edit reordered the markup, and the danger is not that it stops matching — it
+ * is that it matches the element that took over the position. So the direct hit
+ * is only trusted when it still looks like the recorded element; otherwise
+ * identity falls back to tag + classes + text.
+ */
+function resolveTarget(target: VerificationTarget): Element | null {
+  try {
+    const direct = document.querySelector(target.path);
+    if (direct && matchesDescriptor(direct, target)) return direct;
+  } catch {
+    // malformed selector — fall through to the descriptive match
+  }
+  if (!target.tag) return null;
+
+  const selector =
+    target.classes && target.classes.length > 0
+      ? `${target.tag}.${target.classes.map((c) => c.replace(/([^\w-])/g, "\\$1")).join(".")}`
+      : target.tag;
+
+  let candidates: Element[] = [];
+  try {
+    candidates = Array.from(document.querySelectorAll(selector));
+  } catch {
+    return null;
+  }
+  if (candidates.length === 1) return candidates[0] ?? null;
+  if (target.text) {
+    return candidates.find((c) => textPreview(c) === target.text) ?? null;
+  }
+  return null;
+}
+
 class EditUpAgent {
   private overlay = new FloatingBracketsOverlay();
   private socket: WebSocket | null = null;
@@ -35,6 +91,8 @@ class EditUpAgent {
   private pseudoPreview = new PseudoPreviewManager();
   private badge: HTMLDivElement | null = null;
   private gestureSeq = 0;
+  /** True when this page load was triggered by a verification reload. */
+  private pendingVerification = consumeVerifyFlag();
   private drag = new DragController({
     getSelected: () => (this.editing ? this.selectedEl : null),
     onCommit: (changes) => this.sendGestureChanges(changes),
@@ -100,6 +158,13 @@ class EditUpAgent {
     ws.onopen = (): void => {
       this.updateBadge("connected (waiting)", "#3b82f6");
       this.send({ type: "hello", token: this.config.sessionToken });
+      // Announce that the page came back from a verification reload. This must
+      // not depend on re-anchoring the selection: a reorder moves the element,
+      // its positional selector stops matching, and verification would then
+      // wait forever for a snapshot that never comes.
+      if (this.pendingVerification) {
+        this.send({ type: "verify_ready" });
+      }
     };
     ws.onmessage = (ev): void => {
       try {
@@ -185,15 +250,11 @@ class EditUpAgent {
       case "capture_elements": {
         // Verification of a multi-element edit needs each element's own styles;
         // the selected element's computed style says nothing about its siblings.
-        const req = msg.payload as { paths?: string[] } | undefined;
+        const req = msg.payload as { targets?: VerificationTarget[] } | undefined;
         const styles: Record<string, Record<string, string>> = {};
-        for (const path of req?.paths ?? []) {
-          try {
-            const found = document.querySelector(path);
-            if (found) styles[path] = captureComputedStyle(found);
-          } catch {
-            // invalid selector — reported as missing, never as a match
-          }
+        for (const target of req?.targets ?? []) {
+          const found = resolveTarget(target);
+          if (found) styles[target.path] = captureComputedStyle(found);
         }
         this.send({ type: "elements_captured", payload: { styles } });
         break;
@@ -320,8 +381,8 @@ class EditUpAgent {
     const payload = buildSnapshotPayload(el);
     // Tag the first snapshot after a verification reload so the app knows this
     // capture reflects the source, not the live previews.
-    if (sessionStorage.getItem(VERIFY_FLAG)) {
-      sessionStorage.removeItem(VERIFY_FLAG);
+    if (this.pendingVerification) {
+      this.pendingVerification = false;
       payload.verification = true;
     }
     const wsOpen = this.socket?.readyState === WebSocket.OPEN;

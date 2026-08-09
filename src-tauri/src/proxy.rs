@@ -45,7 +45,18 @@ impl ProxyState {
         if !p.is_dir() {
             return Err(format!("not a directory: {path}"));
         }
-        *self.project_root.write().await = Some(path);
+        // Store the canonical absolute form. A root typed without its drive
+        // letter ("\Users\...") is a valid directory on Windows, but every path
+        // the AI reports back carries the drive — so the two never matched and
+        // the file audit compared unrelated strings.
+        let canonical = std::fs::canonicalize(p)
+            .map_err(|e| format!("cannot resolve {path}: {e}"))?;
+        let resolved = canonical.to_string_lossy().to_string();
+        let resolved = resolved
+            .strip_prefix(r"\\?\")
+            .unwrap_or(&resolved)
+            .to_string();
+        *self.project_root.write().await = Some(resolved);
         Ok(())
     }
 

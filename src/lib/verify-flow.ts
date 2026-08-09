@@ -29,36 +29,42 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
- * Reloads the page and waits for the snapshot captured after it.
+ * Reloads the page and waits for the agent to announce it is back.
  *
  * The agent applies previews as inline styles on the live element, so reading
  * the element back without reloading confirms the edit even when the AI wrote
- * nothing. Only a snapshot tagged `verification` — taken after the document was
- * rebuilt from source — is evidence.
+ * nothing. The readiness signal is deliberately independent of the selection:
+ * a reorder moves the element, its positional selector stops matching, and
+ * waiting for a re-anchored snapshot would hang until timeout.
  *
- * @returns The post-reload snapshot, or null when it never arrived
+ * @returns True when the reloaded page reported in
  */
-async function awaitVerificationSnapshot(): Promise<AgentSnapshot | null> {
-  return new Promise<AgentSnapshot | null>((resolve) => {
+async function reloadAndAwaitReady(): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
     let settled = false;
-    let unlisten: (() => void) | null = null;
+    let unlistenReady: (() => void) | null = null;
+    let unlistenSnap: (() => void) | null = null;
 
-    const finish = (snap: AgentSnapshot | null): void => {
+    const finish = (ok: boolean): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      if (unlisten) unlisten();
-      resolve(snap);
+      if (unlistenReady) unlistenReady();
+      if (unlistenSnap) unlistenSnap();
+      resolve(ok);
     };
 
     const timer = setTimeout(() => {
-      logger.warn("verification snapshot never arrived after reload");
-      finish(null);
+      logger.warn("page never reported back after the verification reload");
+      finish(false);
     }, SNAPSHOT_TIMEOUT_MS);
 
     const setup = async (): Promise<void> => {
-      unlisten = await listen<AgentSnapshot>("agent_snapshot", (event) => {
-        if (event.payload?.verification === true) finish(event.payload);
+      unlistenReady = await listen("agent_verify_ready", () => finish(true));
+      // A tagged snapshot also proves the page came back, for agents that
+      // re-anchor before announcing.
+      unlistenSnap = await listen<AgentSnapshot>("agent_snapshot", (event) => {
+        if (event.payload?.verification === true) finish(true);
       });
       await invoke("verify_reload");
     };
@@ -67,25 +73,9 @@ async function awaitVerificationSnapshot(): Promise<AgentSnapshot | null> {
       logger.warn("verification reload failed", {
         reason: err instanceof Error ? err.message : String(err),
       });
-      finish(null);
+      finish(false);
     });
   });
-}
-
-/**
- * Checks that the freshly captured element is the same one the edit targeted.
- * Compares tag plus source file when both sides know it; classes are not used
- * because the edit itself may legitimately rewrite them (e.g. Tailwind).
- */
-function isSameElement(
-  expected: EnrichedSnapshot["element"],
-  fresh: AgentSnapshot["element"]
-): boolean {
-  if (expected.tag !== fresh.tag) return false;
-  if (expected.source_file && fresh.source_file) {
-    return expected.source_file === fresh.source_file;
-  }
-  return true;
 }
 
 async function fetchChangedFiles(): Promise<string[] | null> {
@@ -109,17 +99,25 @@ interface ElementStylesPayload {
   styles: Record<string, Record<string, string>>;
 }
 
+/** How an element is located after the edit: by path, else by description. */
+interface VerificationTarget {
+  path: string;
+  tag: string;
+  classes: string[];
+  text?: string;
+}
+
 /**
- * Asks the page for the computed styles of the other edited elements, so each
- * one is verified against itself instead of being skipped.
+ * Asks the page for the computed styles of every edited element, so each one is
+ * verified against itself instead of being skipped.
  *
- * @param paths dom_path selectors of the elements to measure
+ * @param targets Elements to measure, keyed by their dom_path
  * @returns Styles keyed by dom_path; empty when the page did not answer
  */
 async function captureElementStyles(
-  paths: string[]
+  targets: VerificationTarget[]
 ): Promise<Record<string, Record<string, string>>> {
-  if (paths.length === 0) return {};
+  if (targets.length === 0) return {};
   return new Promise((resolve) => {
     let settled = false;
     let unlisten: (() => void) | null = null;
@@ -138,21 +136,39 @@ async function captureElementStyles(
       unlisten = await listen<ElementStylesPayload>("agent_elements_captured", (ev) => {
         finish(ev.payload?.styles ?? {});
       });
-      await invoke("capture_elements", { paths });
+      await invoke("capture_elements", { targets });
     };
 
     setup().catch(() => finish({}));
   });
 }
 
-/** dom_paths of every element edited besides the primary one. */
-function secondaryPaths(snapshot: EnrichedSnapshot): string[] {
-  const paths = new Set<string>();
-  for (const change of snapshot.changes) {
-    const path = change.element_ref?.dom_path;
-    if (path) paths.add(path);
+/** Every element touched by this edit: the selected one plus each element_ref. */
+function verificationTargets(snapshot: EnrichedSnapshot): VerificationTarget[] {
+  const byPath = new Map<string, VerificationTarget>();
+
+  const el = snapshot.element;
+  if (el.dom_path) {
+    byPath.set(el.dom_path, {
+      path: el.dom_path,
+      tag: el.tag,
+      classes: el.classes,
+      ...(el.text_preview ? { text: el.text_preview } : {}),
+    });
   }
-  return Array.from(paths);
+
+  for (const change of snapshot.changes) {
+    const ref = change.element_ref;
+    if (!ref?.dom_path || byPath.has(ref.dom_path)) continue;
+    byPath.set(ref.dom_path, {
+      path: ref.dom_path,
+      tag: ref.tag,
+      classes: ref.classes,
+      ...(ref.text_preview ? { text: ref.text_preview } : {}),
+    });
+  }
+
+  return Array.from(byPath.values());
 }
 
 /** Captures the set of dirty files before execute, so the post-execute diff audit only counts files the AI actually touched. */
@@ -183,20 +199,26 @@ export function createVerifier(
    */
   const observe = async (): Promise<VisualCheckResult | null> => {
     await delay(HOT_RELOAD_DELAY_MS);
-    const fresh = await awaitVerificationSnapshot();
-    if (!fresh) return null;
-    if (!isSameElement(snapshot.element, fresh.element)) {
-      logger.warn("verification element mismatch", {
-        expected_tag: snapshot.element.tag,
-        actual_tag: fresh.element.tag,
-      });
+    if (!(await reloadAndAwaitReady())) return null;
+
+    const targets = verificationTargets(snapshot);
+    const styles = await captureElementStyles(targets);
+
+    const primaryPath = snapshot.element.dom_path;
+    const primaryStyles = primaryPath ? styles[primaryPath] : undefined;
+    const primaryChanges = snapshot.changes.some((c) => c.element_ref === undefined);
+
+    // Measuring nothing is not a pass: if the element the developer edited
+    // cannot be found in the reloaded page, say so instead of guessing.
+    if (primaryChanges && !primaryStyles) {
+      logger.warn("edited element not found after reload", { path: primaryPath });
       return null;
     }
-    const elementStyles = await captureElementStyles(secondaryPaths(snapshot));
+
     return checkVisual({
       snapshot,
-      postEditComputed: fresh.computed_style ?? {},
-      elementStyles,
+      postEditComputed: primaryStyles ?? {},
+      elementStyles: styles,
     });
   };
 

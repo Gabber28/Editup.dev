@@ -85,8 +85,12 @@ export function App(): JSX.Element | null {
   const pseudo = usePseudoState(agent.snapshot, baseSnapshot, elementOverrides);
 
   const handleReady = useCallback(async (projectRoot: string) => {
-    projectRootRef.current = projectRoot;
     await invoke("set_project_root", { path: projectRoot });
+    // Use the canonical form the backend resolved: a root typed without its
+    // drive letter still opens, but would never match the absolute paths the
+    // AI reports back.
+    projectRootRef.current =
+      (await invoke<string | null>("get_project_root")) ?? projectRoot;
     await agent.startEditing();
     setMode("editing");
   }, [agent]);
