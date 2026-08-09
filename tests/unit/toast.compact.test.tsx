@@ -13,11 +13,7 @@ describe("ApprovalToast — compact (high confidence, no side effects)", () => {
 
   it("renders plan summary in the title", () => {
     render(
-      <ApprovalToast
-        plan={highNoPlan}
-        onApprove={vi.fn()}
-        onReject={vi.fn()}
-      />,
+      <ApprovalToast plan={highNoPlan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.getByText(/Apply changes/)).toBeTruthy();
     expect(screen.getByText(/1 file/)).toBeTruthy();
@@ -34,40 +30,28 @@ describe("ApprovalToast — compact (high confidence, no side effects)", () => {
       ],
     });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.getByText(/3 files/)).toBeTruthy();
   });
 
   it("displays the file paths", () => {
     render(
-      <ApprovalToast
-        plan={highNoPlan}
-        onApprove={vi.fn()}
-        onReject={vi.fn()}
-      />,
+      <ApprovalToast plan={highNoPlan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.getByText(/src\/Button\.tsx/)).toBeTruthy();
   });
 
   it("does not show side effects section", () => {
     render(
-      <ApprovalToast
-        plan={highNoPlan}
-        onApprove={vi.fn()}
-        onReject={vi.fn()}
-      />,
+      <ApprovalToast plan={highNoPlan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.queryByText(/Side effects/)).toBeNull();
   });
 
   it("does not show alternatives section for high confidence", () => {
     render(
-      <ApprovalToast
-        plan={highNoPlan}
-        onApprove={vi.fn()}
-        onReject={vi.fn()}
-      />,
+      <ApprovalToast plan={highNoPlan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.queryByText(/Alternatives/)).toBeNull();
   });
@@ -79,7 +63,7 @@ describe("ApprovalToast — compact (high confidence, no side effects)", () => {
         plan={highNoPlan}
         onApprove={onApprove}
         onReject={vi.fn()}
-      />,
+      />
     );
     fireEvent.keyDown(document, { key: "Enter" });
     expect(onApprove).toHaveBeenCalledOnce();
@@ -92,7 +76,7 @@ describe("ApprovalToast — compact (high confidence, no side effects)", () => {
         plan={highNoPlan}
         onApprove={vi.fn()}
         onReject={onReject}
-      />,
+      />
     );
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onReject).toHaveBeenCalledOnce();
@@ -105,9 +89,10 @@ describe("ApprovalToast — compact (high confidence, no side effects)", () => {
         plan={highNoPlan}
         onApprove={onApprove}
         onReject={vi.fn()}
-      />,
+      />
     );
-    fireEvent.click(screen.getByText(/Apply/));
+    // The toast title also contains "Apply", so scope the query to the button.
+    fireEvent.click(screen.getByRole("button", { name: /Apply/ }));
     expect(onApprove).toHaveBeenCalledOnce();
   });
 
@@ -118,7 +103,7 @@ describe("ApprovalToast — compact (high confidence, no side effects)", () => {
         plan={highNoPlan}
         onApprove={vi.fn()}
         onReject={onReject}
-      />,
+      />
     );
     fireEvent.click(screen.getByText(/Cancel/));
     expect(onReject).toHaveBeenCalledOnce();
@@ -126,11 +111,7 @@ describe("ApprovalToast — compact (high confidence, no side effects)", () => {
 
   it("has alertdialog role for accessibility", () => {
     render(
-      <ApprovalToast
-        plan={highNoPlan}
-        onApprove={vi.fn()}
-        onReject={vi.fn()}
-      />,
+      <ApprovalToast plan={highNoPlan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.getByRole("alertdialog")).toBeTruthy();
   });

@@ -5,6 +5,7 @@ import {
   clickApply,
   waitForToast,
   approveToast,
+  makeEdit,
 } from "./helpers/e2e-helpers.js";
 import {
   setAgentConnected,
@@ -19,7 +20,9 @@ test.describe("E2E full flow: proxy → edit → plan → toast → execute → 
     await expect(page.locator(".setup-input").first()).toBeVisible();
   });
 
-  test("transitions from setup to editor after agent connection", async ({ page }) => {
+  test("transitions from setup to editor after agent connection", async ({
+    page,
+  }) => {
     await gotoApp(page);
 
     const urlInput = page.locator(".setup-input").first();
@@ -41,11 +44,12 @@ test.describe("E2E full flow: proxy → edit → plan → toast → execute → 
     await expect(page.locator(".element-identity__tag")).toBeVisible();
   });
 
-  test("complete flow: edit → plan → approve → execute → commit", async ({ page }) => {
+  test("complete flow: edit → plan → approve → execute → commit", async ({
+    page,
+  }) => {
     await navigateToEditor(page);
 
-    const colorInputs = page.locator(".panel-content input[type='text']");
-    await colorInputs.first().fill("rgb(0, 0, 0)");
+    await makeEdit(page);
 
     const previewCalls = await getInvokeCalls(page, "preview_style");
     expect(previewCalls.length).toBeGreaterThanOrEqual(1);

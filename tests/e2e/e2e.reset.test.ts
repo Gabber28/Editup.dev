@@ -4,6 +4,7 @@ import {
   clickApply,
   waitForToast,
   approveToast,
+  makeEdit,
 } from "./helpers/e2e-helpers.js";
 import { getInvokeCalls } from "./helpers/tauri-mock.js";
 
@@ -11,8 +12,7 @@ test.describe("E2E reset: reset removes overrides", () => {
   test("Done button resets to idle state after apply", async ({ page }) => {
     await navigateToEditor(page);
 
-    const colorInputs = page.locator(".panel-content input[type='text']");
-    await colorInputs.first().fill("red");
+    await makeEdit(page);
     await clickApply(page);
 
     await waitForToast(page);
@@ -32,8 +32,7 @@ test.describe("E2E reset: reset removes overrides", () => {
   test("rejecting toast returns to idle without applying", async ({ page }) => {
     await navigateToEditor(page);
 
-    const colorInputs = page.locator(".panel-content input[type='text']");
-    await colorInputs.first().fill("green");
+    await makeEdit(page);
     await clickApply(page);
 
     await waitForToast(page);
@@ -46,8 +45,7 @@ test.describe("E2E reset: reset removes overrides", () => {
   test("Escape key dismisses toast and cancels apply", async ({ page }) => {
     await navigateToEditor(page);
 
-    const colorInputs = page.locator(".panel-content input[type='text']");
-    await colorInputs.first().fill("blue");
+    await makeEdit(page);
     await clickApply(page);
 
     await waitForToast(page);

@@ -15,7 +15,7 @@ test.describe("E2E layers: clicking layers updates editor", () => {
 
     const layerBtn = page.locator(".layers-panel button").first();
     const bgColor = await layerBtn.evaluate(
-      (el) => getComputedStyle(el).backgroundColor,
+      (el) => getComputedStyle(el).backgroundColor
     );
     expect(bgColor).not.toBe("transparent");
   });
@@ -36,8 +36,12 @@ test.describe("E2E layers: clicking layers updates editor", () => {
     await expect(identity).toContainText("12");
   });
 
-  test("code box shows source snippet for selected element", async ({ page }) => {
+  test("code box shows source snippet for selected element", async ({
+    page,
+  }) => {
     await navigateToEditor(page);
+
+    await page.locator(".panel-tabs__tab", { hasText: "Source" }).click();
 
     const codeBox = page.locator(".code-box");
     await expect(codeBox).toBeVisible();

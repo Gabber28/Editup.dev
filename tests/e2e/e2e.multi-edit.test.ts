@@ -1,78 +1,101 @@
 import { test, expect } from "@playwright/test";
-import { navigateToEditor } from "./helpers/e2e-helpers.js";
+import { navigateToEditor, openPanel } from "./helpers/e2e-helpers.js";
 import { getInvokeCalls } from "./helpers/tauri-mock.js";
 
+const firstTextInput = (page: import("@playwright/test").Page) =>
+  page.locator(".panel-content input[type='text']").first();
+
 test.describe("E2E multi-edit: multiple edits generate independent snapshots", () => {
-  test("editing colors then switching to spacing keeps both", async ({ page }) => {
+  test("editing spacing then switching to effects keeps both", async ({
+    page,
+  }) => {
     await navigateToEditor(page);
 
-    const colorInputs = page.locator(".panel-content input[type='text']");
-    await colorInputs.first().fill("#ff0000");
+    await openPanel(page, "Spacing");
+    await firstTextInput(page).fill("20px");
 
-    await page.locator('.panel-tabs__tab:has-text("Spacing")').click();
-    const spacingInputs = page.locator(".panel-content input[type='text']");
-    await spacingInputs.first().fill("20px");
+    await openPanel(page, "Effects");
+    await firstTextInput(page).fill("0.5");
 
     const calls = await getInvokeCalls(page, "preview_style");
     expect(calls.length).toBeGreaterThanOrEqual(2);
 
-    const props = calls.map(
-      (c) => (c.args as { property: string }).property,
-    );
-    expect(props.some((p) => p.includes("color") || p.includes("background"))).toBe(true);
-    expect(props.some((p) => p.includes("margin") || p.includes("padding"))).toBe(true);
+    const props = calls.map((c) => (c.args as { property: string }).property);
+    expect(
+      props.some((p) => p.includes("margin") || p.includes("padding"))
+    ).toBe(true);
+    expect(
+      props.some((p) => p.includes("opacity") || p.includes("shadow"))
+    ).toBe(true);
   });
 
-  test("switching back to colors tab preserves edited values", async ({ page }) => {
+  test("switching back to a panel preserves edited values", async ({
+    page,
+  }) => {
     await navigateToEditor(page);
 
-    const colorInputs = page.locator(".panel-content input[type='text']");
-    await colorInputs.first().fill("hotpink");
+    await openPanel(page, "Spacing");
+    await firstTextInput(page).fill("18px");
 
-    await page.locator('.panel-tabs__tab:has-text("Spacing")').click();
-    await page.locator('.panel-tabs__tab:has-text("Colors")').click();
+    await openPanel(page, "Effects");
+    await openPanel(page, "Spacing");
 
-    const firstInput = page.locator(".panel-content input[type='text']").first();
-    await expect(firstInput).toHaveValue("hotpink");
+    await expect(firstTextInput(page)).toHaveValue("18px");
   });
 
-  test("all 6 panel tabs are navigable", async ({ page }) => {
+  test("every panel in the bar is navigable", async ({ page }) => {
     await navigateToEditor(page);
 
-    const panels = ["Colors", "Spacing", "Type", "Border", "Layout", "Effects"];
-    for (const panel of panels) {
-      await page.locator(`.panel-tabs__tab:has-text("${panel}")`).click();
+    // Derived from the section registry, so the bar is whatever applies to the
+    // selected element — a <button> with text: universals + Typography + Link.
+    const tabs = page.locator(".panel-tabs__tab");
+    const labels = await tabs.allTextContents();
+    expect(labels).toEqual([
+      "Layout",
+      "Spacing",
+      "Effects",
+      "Colors",
+      "Borders",
+      "Typography",
+      "Link",
+      "Source",
+    ]);
+
+    for (const label of labels) {
+      await openPanel(page, label);
       await expect(
-        page.locator(`.panel-tabs__tab:has-text("${panel}")`),
+        page.locator(`.panel-tabs__tab:has-text("${label}")`)
       ).toHaveClass(/--active/);
     }
   });
 
-  test("Apply button is enabled when any property has changes", async ({ page }) => {
+  test("Apply button is enabled when any property has changes", async ({
+    page,
+  }) => {
     await navigateToEditor(page);
 
     const applyBtn = page.locator(".apply-bar__btn--primary");
     await expect(applyBtn).toBeDisabled();
 
-    await page.locator('.panel-tabs__tab:has-text("Effects")').click();
-    const inputs = page.locator(".panel-content input[type='text']");
-    await inputs.first().fill("0.5");
+    await openPanel(page, "Effects");
+    await firstTextInput(page).fill("0.5");
 
     await expect(applyBtn).toBeEnabled();
   });
 
-  test("editing across multiple panels sends correct preview calls", async ({ page }) => {
+  test("editing across multiple panels sends correct preview calls", async ({
+    page,
+  }) => {
     await navigateToEditor(page);
 
-    await page.locator(".panel-content input[type='text']").first().fill("navy");
+    await openPanel(page, "Spacing");
+    await firstTextInput(page).fill("6px");
 
-    await page.locator('.panel-tabs__tab:has-text("Type")').click();
-    const typeInputs = page.locator(".panel-content input[type='text']");
-    await typeInputs.first().fill("24px");
+    await openPanel(page, "Typography");
+    await firstTextInput(page).fill("24px");
 
-    await page.locator('.panel-tabs__tab:has-text("Border")').click();
-    const borderInputs = page.locator(".panel-content input[type='text']");
-    await borderInputs.first().fill("2px");
+    await openPanel(page, "Borders");
+    await firstTextInput(page).fill("2px");
 
     const calls = await getInvokeCalls(page, "preview_style");
     expect(calls.length).toBeGreaterThanOrEqual(3);

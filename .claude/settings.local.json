@@ -99,7 +99,20 @@
       "Bash(curl -s -o /dev/null -w \"position-align.ts   -> %{http_code}\\\\n\" \"http://127.0.0.1:5173/src/components/editor/panels/position-align.ts\")",
       "Bash(curl -s -o /dev/null -w \"layout-panel.tsx    -> %{http_code}\\\\n\" \"http://127.0.0.1:5173/src/components/editor/panels/layout-panel.tsx\")",
       "Bash(curl -s -o /dev/null -w \"transform.ts -> %{http_code}\\\\n\" \"http://127.0.0.1:5173/src/lib/transform.ts\")",
-      "Bash(curl -s -o /dev/null -w \"position-controls -> %{http_code}\\\\n\" \"http://127.0.0.1:5173/src/components/editor/panels/position-controls.tsx\")"
+      "Bash(curl -s -o /dev/null -w \"position-controls -> %{http_code}\\\\n\" \"http://127.0.0.1:5173/src/components/editor/panels/position-controls.tsx\")",
+      "Bash(claude --version)",
+      "Read(//c/Users/gabri/**)",
+      "Read(//c/Users/gabri/.local/bin/**)",
+      "Read(//c/Users/gabri/.claude/**)",
+      "PowerShell($j = Get-Content \"$HOME\\\\.claude.json\" -Raw | ConvertFrom-Json; $p = $j.projects.\"C:/Users/gabri/Documents/codigos/SaaS's/Editup.dev\"; Write-Output \"=== project entry keys ===\"; $p.PSObject.Properties.Name; Write-Output \"=== mcpServers ===\"; if \\($p.mcpServers\\) { $p.mcpServers.PSObject.Properties.Name } else { \"\\(none\\)\" }; Write-Output \"=== disabledMcpServers ===\"; if \\($p.disabledMcpServers\\) { $p.disabledMcpServers } else { \"\\(none\\)\" }; Write-Output \"=== enabledMcpjsonServers ===\"; if \\($p.enabledMcpjsonServers\\) { $p.enabledMcpjsonServers } else { \"\\(none\\)\" })",
+      "PowerShell(Write-Output \"=== tests dir ===\"; if \\(Test-Path \"tests\"\\) { Get-ChildItem \"tests\" -Recurse -File | ForEach-Object { $_.FullName.Replace\\(\\(Get-Location\\).Path + \"\\\\\",\"\"\\) } } else { \"\\(absent\\)\" }; Write-Output \"=== landing/AGENTS.md ===\"; if \\(Test-Path \"landing\\\\AGENTS.md\"\\) { \"present, $\\(\\(Get-Item 'landing\\\\AGENTS.md'\\).Length\\) bytes\" } else { \"ABSENT\" }; Write-Output \"=== root dirs ===\"; Get-ChildItem -Directory | ForEach-Object { $_.Name }; Write-Output \"=== package.json scripts ===\"; $pkg = Get-Content \"package.json\" -Raw | ConvertFrom-Json; $pkg.scripts.PSObject.Properties | ForEach-Object { \"$\\($_.Name\\) = $\\($_.Value\\)\" })",
+      "Bash(grep -n \"^#\\\\{1,3\\\\} \" CLAUDE.md)",
+      "Bash(node \"C:/Users/gabri/AppData/Local/Temp/claude/C--Users-gabri-Documents-codigos-SaaS-s-Editup-dev/094ca362-8360-4a58-83f9-98efb5359843/scratchpad/trim.js\" \"CLAUDE.md\" \"C:/Users/gabri/AppData/Local/Temp/claude/C--Users-gabri-Documents-codigos-SaaS-s-Editup-dev/094ca362-8360-4a58-83f9-98efb5359843/scratchpad\")",
+      "Bash(npx prettier *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(node -e ' *)",
+      "Bash(git checkout *)",
+      "Bash(git status *)"
     ]
   }
 }

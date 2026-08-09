@@ -4,11 +4,14 @@ import {
   clickApply,
   waitForToast,
   approveToast,
+  makeEdit,
 } from "./helpers/e2e-helpers.js";
 import { getInvokeCalls } from "./helpers/tauri-mock.js";
 
-async function completeApplyFlow(page: import("@playwright/test").Page): Promise<void> {
-  await page.locator(".panel-content input[type='text']").first().fill("red");
+async function completeApplyFlow(
+  page: import("@playwright/test").Page
+): Promise<void> {
+  await makeEdit(page);
   await clickApply(page);
   await waitForToast(page);
   await approveToast(page);

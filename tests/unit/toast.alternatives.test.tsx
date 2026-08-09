@@ -25,7 +25,7 @@ describe("ApprovalToast — low confidence / alternatives", () => {
       alternatives: twoAlternatives,
     });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.getByText(/Alternatives/)).toBeTruthy();
   });
@@ -37,7 +37,7 @@ describe("ApprovalToast — low confidence / alternatives", () => {
       alternatives: twoAlternatives,
     });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.getByText("Use CSS variables instead")).toBeTruthy();
     expect(screen.getByText("Inline styles only")).toBeTruthy();
@@ -50,7 +50,7 @@ describe("ApprovalToast — low confidence / alternatives", () => {
       alternatives: twoAlternatives,
     });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.queryByText(/Alternatives/)).toBeNull();
   });
@@ -62,7 +62,7 @@ describe("ApprovalToast — low confidence / alternatives", () => {
       alternatives: twoAlternatives,
     });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.getByText(/Alternatives/)).toBeTruthy();
     expect(screen.getByText("Use CSS variables instead")).toBeTruthy();
@@ -75,7 +75,7 @@ describe("ApprovalToast — low confidence / alternatives", () => {
       alternatives: undefined,
     });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.queryByText(/Alternatives/)).toBeNull();
   });
@@ -87,9 +87,10 @@ describe("ApprovalToast — low confidence / alternatives", () => {
       alternatives: twoAlternatives,
     });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
-    expect(screen.getByText(/Apply/)).toBeTruthy();
-    expect(screen.getByText(/Cancel/)).toBeTruthy();
+    // The toast title also contains "Apply", so scope the queries to buttons.
+    expect(screen.getByRole("button", { name: /Apply/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Cancel/ })).toBeTruthy();
   });
 });

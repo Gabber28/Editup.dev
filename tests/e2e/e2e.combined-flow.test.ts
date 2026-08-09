@@ -4,6 +4,7 @@ import {
   clickApply,
   waitForToast,
   approveToast,
+  makeEdit,
 } from "./helpers/e2e-helpers.js";
 import { getInvokeCalls } from "./helpers/tauri-mock.js";
 
@@ -19,7 +20,9 @@ test.describe("E2E combined flow: visual + text instructions in same apply", () 
     await expect(aiInput).toHaveValue("add hover glow effect");
   });
 
-  test("text instruction combined with visual change enables Apply", async ({ page }) => {
+  test("text instruction combined with visual change enables Apply", async ({
+    page,
+  }) => {
     await navigateToEditor(page);
 
     const applyBtn = page.locator(".apply-bar__btn--primary");
@@ -28,8 +31,7 @@ test.describe("E2E combined flow: visual + text instructions in same apply", () 
     const aiInput = page.locator(".ai-input__field");
     await aiInput.fill("add a subtle shadow");
 
-    const colorInputs = page.locator(".panel-content input[type='text']");
-    await colorInputs.first().fill("#222");
+    await makeEdit(page);
 
     await expect(applyBtn).toBeEnabled();
   });
@@ -37,8 +39,7 @@ test.describe("E2E combined flow: visual + text instructions in same apply", () 
   test("combined visual + text triggers apply with both", async ({ page }) => {
     await navigateToEditor(page);
 
-    const colorInputs = page.locator(".panel-content input[type='text']");
-    await colorInputs.first().fill("#333");
+    await makeEdit(page);
 
     const aiInput = page.locator(".ai-input__field");
     await aiInput.fill("increase font size on mobile");
@@ -56,7 +57,7 @@ test.describe("E2E combined flow: visual + text instructions in same apply", () 
   test("toast shows file info for combined changes", async ({ page }) => {
     await navigateToEditor(page);
 
-    await page.locator(".panel-content input[type='text']").first().fill("navy");
+    await makeEdit(page);
 
     const aiInput = page.locator(".ai-input__field");
     await aiInput.fill("add border radius");
@@ -75,7 +76,7 @@ test.describe("E2E combined flow: visual + text instructions in same apply", () 
     const aiInput = page.locator(".ai-input__field");
     await aiInput.fill("add animation");
 
-    await page.locator(".panel-content input[type='text']").first().fill("red");
+    await makeEdit(page);
     await clickApply(page);
     await waitForToast(page);
     await approveToast(page);

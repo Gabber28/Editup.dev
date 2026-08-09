@@ -8,99 +8,6 @@ EditUp.dev é um editor visual no-code para frontend web. Funciona via proxy loc
 
 Documento de planejamento: `editup-planning-v3.2 (1).md` (na raiz do projeto, apenas referência — não incluir no build).
 
-## Stack
-
-- **Runtime:** Tauri v2 (Rust backend + webview frontend)
-- **Frontend do app:** React 19 + TypeScript
-- **Proxy:** Rust nativo (hyper + tower-http)
-- **Script injetado no browser:** TypeScript vanilla, bundlado com esbuild
-- **Source maps:** `@jridgewell/trace-mapping`
-- **AI interface:** Adapter Registry — MCP Server (universal) + CLI Adapters (Claude Code, Aider) + Anthropic SDK + Copy Prompt
-- **EditPlan validation:** Zod
-- **Testes:** Vitest (unit) + Playwright (e2e)
-- **Linting:** ESLint + Prettier
-- **Package manager:** pnpm
-
-## Estrutura do projeto
-
-```
-editup.dev/
-├── src-tauri/              # Backend Rust do Tauri (inclui proxy nativo)
-│   ├── src/
-│   └── Cargo.toml
-├── src/                    # Frontend React do app Tauri
-│   ├── components/
-│   │   └── editor/         # Editor visual (layout adaptativo)
-│   │       ├── editor-shell.tsx      # Container principal, detecta width (wide/medium/narrow)
-│   │       ├── element-identity.tsx  # Barra de identidade + breadcrumb + mini-preview
-│   │       ├── layers-panel.tsx      # Árvore DOM, seleção, marcadores de editado
-│   │       ├── inspector.tsx         # Inspetor rolável único (empilha seções contextuais)
-│   │       ├── sections.tsx          # Registry de seções (ordem + aplicabilidade)
-│   │       ├── section-group.tsx     # Seção colapsável (estado persistido por id)
-│   │       ├── panels/
-│   │       │   ├── color-panel.tsx
-│   │       │   ├── spacing-panel.tsx
-│   │       │   ├── typography-panel.tsx
-│   │       │   ├── border-panel.tsx
-│   │       │   ├── layout-panel.tsx
-│   │       │   └── effects-panel.tsx
-│   │       ├── code-box.tsx          # Snippet do source (read-only, syntax highlight)
-│   │       ├── progress-marker.tsx   # Dots horizontais de elementos editados na seção
-│   │       └── ai-input.tsx          # Input de texto para instruções AI
-│   ├── hooks/
-│   ├── lib/
-│   │   └── ai-adapters/    # Adapter Registry para múltiplas AI tools
-│   │       ├── types.ts              # Interface AIAdapter
-│   │       ├── registry.ts           # Detecção, seleção, registro
-│   │       ├── claude-code.ts        # ClaudeCodeAdapter (spawn)
-│   │       ├── aider.ts              # AiderAdapter (spawn)
-│   │       ├── anthropic-sdk.ts      # AnthropicSDKAdapter (API direta)
-│   │       ├── copy-prompt.ts        # CopyPromptAdapter (clipboard)
-│   │       ├── mcp-server.ts         # MCP server (127.0.0.1 only)
-│   │       └── session-manager.ts    # Registro de sessão, PID tracking
-│   ├── types/
-│   └── App.tsx
-├── injected/               # Script injetado no browser do usuário
-│   ├── agent.ts            # Captura DOM, getComputedStyle, CSS rules, source maps, WebSocket
-│   └── overlay.ts          # Floating brackets nos cantos (sem overlay de fundo)
-├── ai-bridge/              # Orquestração plan → approve → execute
-│   ├── orchestrator.ts     # Plan → Toast → Execute (dois passos)
-│   ├── plan.ts             # Step 1: dry-run read-only
-│   ├── execute.ts          # Step 2: edição com aprovação
-│   ├── edit-plan.ts        # Schema Zod do EditPlan
-│   ├── enriched-snapshot.ts # Snapshot enriquecido com CSS rules + source mapping
-│   └── prompt.ts           # Gerador de prompts (visual + text instructions)
-├── verification/           # Verificação pós-aplicação (3 camadas + correction pass)
-│   ├── visual.ts           # Camada 1: getComputedStyle check
-│   ├── scope.ts            # Camada 2: scope leak detection
-│   ├── diff-audit.ts       # Camada 3: git diff vs plan
-│   └── correction.ts       # Correction pass automático (max 2 tentativas)
-├── tests/
-│   ├── unit/
-│   ├── e2e/
-│   └── security/
-├── landing/                # Landing page (Next.js)
-├── CLAUDE.md
-├── editup-planning-v3.2 (1).md
-└── package.json
-```
-
-## Comandos
-
-```bash
-pnpm dev              # Inicia o app Tauri em dev mode
-pnpm build            # Build de produção
-pnpm test             # Roda todos os testes (unit + e2e + security)
-pnpm test:unit        # Apenas testes unitários
-pnpm test:e2e         # Apenas testes e2e
-pnpm test:security    # Apenas testes de segurança
-pnpm lint             # ESLint + Prettier check
-pnpm lint:fix         # ESLint + Prettier fix
-pnpm inject:build     # Builda o script injetado (esbuild)
-pnpm landing:dev      # Dev server da landing page
-pnpm landing:build    # Build da landing page
-```
-
 ## Convenções de código
 
 - TypeScript strict mode em todo o projeto
@@ -148,32 +55,35 @@ Na janela do EditUp:
 - **Barra de identidade:** tag + classe principal + arquivo:linha + mini-preview do elemento
 - **Breadcrumb DOM:** `body > main > section > div > button` (clicável — troca seleção ao clicar em ancestral)
 
-## Layout do editor — inspetor único rolável (estilo Figma/Webflow)
+## Layout do editor — barra de botões no topo
 
-O editor NÃO usa mais abas. As ferramentas de edição são um **inspetor rolável único** (`inspector.tsx`) com seções **empilhadas e colapsáveis** (`section-group.tsx`), exibidas **contextualmente** conforme o elemento selecionado. As seções vêm de um **registry declarativo** (`sections.tsx`) que é a fonte única de ordem + aplicabilidade.
+As ferramentas de edição ficam atrás de uma **barra de botões pequenos no topo** (`panel-tabs.tsx`), um por grupo de propriedades, mostrando **um painel por vez**. Os botões são derivados de um **registry declarativo** (`sections.tsx`) que é a fonte única de ordem + aplicabilidade — nunca duplicar essa lista em outro lugar.
 
 ### Ordem e agrupamento (fixos)
 
 **Universais (sempre):** Layout → Spacing → Effects → Colors → Borders. Colors é ocultado em elementos de mídia substituída (`img/video/iframe/canvas/embed/object`).
 **Contextuais (só quando aplicável):** Typography (quando `element.has_text`) · Image (quando `media.kind ≠ "none"`).
 **Interação (por último):** Link.
+**Source:** botão ao final, só quando há snippet capturado.
 
-O `StateSelector` (default/:hover/:focus…) fica no topo do inspetor (global). O `CodeBox` vira a seção "Source" ao final. Cada seção persiste seu estado aberto/recolhido por id em `localStorage` (`editup.section.<id>`).
+Como a barra é contextual, o botão ativo pode deixar de existir ao trocar de elemento (estava em Image, seleciona um `<p>`). O `Inspector` **cai para o primeiro botão visível** nesse caso — sem isso a área de painel renderiza vazia.
+
+O `StateSelector` (default/:hover/:focus…) fica logo abaixo da barra, global ao painel ativo.
 
 ### 3 modos adaptativos (largura)
 
-- **Wide (>900px):** Layers panel à esquerda (200px) + inspetor à direita.
-- **Medium (500-900px) / Narrow (<500px):** Layers oculto; o inspetor ocupa a largura toda. Sempre a mesma pilha rolável.
+- **Wide (>900px):** Layers panel à esquerda (200px) + editor à direita.
+- **Medium (500-900px) / Narrow (<500px):** Layers oculto; o editor ocupa a largura toda. A barra de botões é a mesma nos 3 modos, rolando na horizontal quando não cabe.
 
-Apenas o inspetor rola; identity fica fixo no topo e progress + AI input + Apply bar ficam fixos no rodapé (sempre visíveis). Tauri window config: `min_width: 280`, `min_height: 400`.
+Apenas o painel ativo (`.panel-content`) rola; identity + barra de botões + state selector ficam fixos no topo e progress + AI input + Apply bar fixos no rodapé. Tauri window config: `min_width: 280`, `min_height: 400`.
 
 ### Componentes do editor
 
 - **Element identity:** tag, classe, source file:line, mini-preview (cloneNode + computed styles)
 - **Layers panel:** árvore DOM hierárquica, marcadores visuais nos elementos já editados
-- **Inspector:** seções colapsáveis contextuais (registry em `sections.tsx`), universais primeiro
-- **Section group:** cabeçalho + chevron, estado persistido por seção
-- **Code box:** snippet read-only do source do elemento (seção "Source")
+- **Panel tabs:** barra de botões pequenos; recebe a lista pronta por prop (apresentação apenas)
+- **Inspector:** deriva os botões do registry, guarda o ativo e renderiza o painel correspondente
+- **Code box:** snippet read-only do source do elemento (botão "Source")
 - **Progress marker:** dots horizontais mostrando quais elementos da seção já foram editados
 - **AI input:** caixa de texto para instruções em linguagem natural (sempre visível)
 
@@ -219,39 +129,7 @@ Se tudo OK: auto-commit silencioso `editup: <summary>`. Revert é 1 clique.
 
 ## EnrichedSnapshot — captura completa do elemento
 
-```typescript
-type EnrichedSnapshot = {
-  element: {
-    tag: string;
-    id?: string;
-    classes: string[];
-    component_name?: string;
-    source_file?: string;
-    source_line?: number;
-  };
-  styling: {
-    framework: 'tailwind' | 'css-modules' | 'styled-components' | 'css-variables' | 'plain-css' | 'mixed';
-    class_to_rule_map: Record<string, {
-      source_file: string;
-      rule_text: string;
-      line_number: number;
-    }>;
-    active_css_variables: Record<string, {
-      value: string;
-      declared_in: string;
-    }>;
-    tailwind_classes?: string[];
-  };
-  changes: Array<{
-    property: string;
-    before_computed: string;
-    after_computed: string;
-    before_source_rule?: string;
-    expected_final_computed: string;
-  }>;
-  text_instructions?: string;
-};
-```
+Tipo completo em `src/types/snapshot.ts`.
 
 O agente injetado captura não apenas `getComputedStyle`, mas também:
 - `document.styleSheets` → CSS rules matching o elemento
@@ -260,28 +138,7 @@ O agente injetado captura não apenas `getComputedStyle`, mas também:
 
 ## EditPlan — contrato entre AI e EditUp.dev
 
-```typescript
-type EditPlan = {
-  summary: string;
-  files: Array<{
-    path: string;
-    lines_affected: number[];
-    reason: string;
-    change_type: 'target' | 'linked_style' | 'design_token' | 'shared_component' | 'import' | 'formatting' | 'other';
-    change_source: 'visual' | 'text_instruction' | 'both';
-  }>;
-  visual_changes_applied: boolean;
-  text_instructions_applied: boolean;
-  side_effects: string[];
-  confidence: 'high' | 'medium' | 'low';
-  recommended_action: 'apply' | 'review_first' | 'consider_alternatives';
-  alternatives?: Array<{
-    description: string;
-    pros: string[];
-    cons: string[];
-  }>;
-};
-```
+Schema Zod em `ai-bridge/edit-plan.ts`.
 
 Validado com Zod. Se AI retornar fora do schema: nova tentativa com prompt rígido. Após 2 falhas: fallback para Copy Prompt com aviso.
 
@@ -301,18 +158,7 @@ Qualquer AI tool compatível com MCP (Cursor, Claude Desktop, Cline, Windsurf) p
 
 ### Tier 2 — CLI Adapters (spawn)
 
-Para AI tools CLI-based, adapters diretos com `spawn()`:
-
-```typescript
-interface AIAdapter {
-  readonly name: string;
-  readonly type: 'cli' | 'mcp' | 'sdk' | 'clipboard';
-  detect(): Promise<boolean>;
-  plan(snapshot: EnrichedSnapshot): Promise<EditPlan>;
-  execute(plan: EditPlan): Promise<ExecuteResult>;
-  isRunning(): Promise<boolean>;
-}
-```
+Para AI tools CLI-based, adapters diretos com `spawn()`. Interface `AIAdapter` em `src/lib/ai-adapters/types.ts`.
 
 Adapters implementados:
 - **ClaudeCodeAdapter**: `spawn('claude', [...args])` com `--allowedTools`, `--add-dir`, `--output-format json`
@@ -346,31 +192,9 @@ Registro em `~/.editup/sessions.json`:
 - **Conflito detection**: antes de spawnar novo processo AI, verifica se já existe um ativo para o projeto.
 - **PID tracking**: registra PID do terminal pai para identificar de qual terminal veio o `editup init`.
 
-### Invocação Claude Code (exemplo)
+### Invocação Claude Code
 
-```typescript
-// PLAN STEP — read-only, sem Edit
-const planArgs = [
-  '-p', planPrompt,
-  '--model', 'claude-sonnet-4-6',
-  '--allowedTools', 'Read,Glob,Grep',
-  '--add-dir', projectRoot,
-  '--output-format', 'json',
-  '--max-turns', '10',
-];
-
-// EXECUTE STEP — após aprovação do dev
-const executeArgs = [
-  '-p', executePrompt,
-  '--model', 'claude-sonnet-4-6',
-  '--allowedTools', 'Read,Glob,Grep,Edit',
-  '--add-dir', projectRoot,
-  '--output-format', 'json',
-  '--max-turns', '15',
-];
-
-spawn('claude', args, { shell: false, cwd: projectRoot, timeout: 180_000 });
-```
+Argumentos exatos em `src/lib/ai-adapters/claude-code.ts`.
 
 Regras: sempre `spawn()` com `shell: false`. Nunca `--dangerously-skip-permissions`. Plan step sempre sessão nova. `--add-dir` restringe filesystem.
 
@@ -378,113 +202,7 @@ Regras: sempre `spawn()` com `shell: false`. Nunca `--dangerously-skip-permissio
 
 Todo PR deve passar em todos os testes antes de merge.
 
-### Testes unitários (`tests/unit/`)
-
-**Proxy:**
-- `proxy.injection.test.ts` — Script injetado em HTML, NÃO em não-HTML
-- `proxy.passthrough.test.ts` — Headers, cookies, status codes repassados
-- `proxy.websocket.test.ts` — WebSocket HMR repassado intacto
-- `proxy.binding.test.ts` — Bind apenas em `127.0.0.1`
-
-**Agente injetado:**
-- `agent.capture.test.ts` — `getComputedStyle()` + CSS rules corretos para diferentes fontes de estilo
-- `agent.context.test.ts` — Classes, seletor DOM, texto visível, árvore de ancestrais
-- `agent.rules.test.ts` — CSS rule matching via `document.styleSheets`
-- `agent.preview.test.ts` — `element.style` override funciona e é removido ao resetar
-- `agent.token.test.ts` — Rejeita WebSocket sem token válido
-- `agent.brackets.test.ts` — Floating brackets posicionados corretamente nos 4 cantos
-
-**Snapshot:**
-- `snapshot.diff.test.ts` — Diff inclui apenas propriedades que mudaram
-- `snapshot.enriched.test.ts` — EnrichedSnapshot contém class_to_rule_map, active_css_variables, framework
-- `snapshot.format.test.ts` — Campos obrigatórios presentes
-- `snapshot.values.test.ts` — Valores CSS normalizados (rgb → hex)
-
-**Prompt:**
-- `prompt.generation.test.ts` — Prompt contém snapshot, instrução, framework
-- `prompt.combined.test.ts` — Prompt combina visual_changes + text_instructions separados
-- `prompt.sanitization.test.ts` — Escapa caracteres especiais (XML + CDATA)
-- `prompt.framework.test.ts` — Menciona framework correto
-
-**AI Bridge (plan/execute):**
-- `bridge.plan.test.ts` — Plan step usa allowlist sem Edit
-- `bridge.execute.test.ts` — Execute step inclui Edit e EditPlan no prompt
-- `bridge.spawn.test.ts` — Invocação usa `spawn()` com `shell: false`
-- `bridge.no-dangerous.test.ts` — `--dangerously-skip-permissions` NUNCA aparece
-- `bridge.session.test.ts` — Plan step é sempre sessão nova
-- `bridge.conflict.test.ts` — Detecção de processo AI ativo
-- `bridge.fallback.test.ts` — Após 2 falhas, cai para Copy Prompt
-
-**AI Adapters:**
-- `adapter.registry.test.ts` — Registro e detecção de adapters disponíveis
-- `adapter.detection.test.ts` — Detecção de CLIs no PATH e MCP clients
-- `adapter.claude-code.test.ts` — ClaudeCodeAdapter spawn correto
-- `adapter.session-manager.test.ts` — Registro de sessão, PID tracking, conflito
-- `mcp.server.test.ts` — MCP server expõe tools corretamente em 127.0.0.1
-
-**EditPlan validation:**
-- `editplan.schema.test.ts` — Zod valida campos obrigatórios, tipos, enums
-- `editplan.combined.test.ts` — change_source, visual_changes_applied, text_instructions_applied
-- `editplan.invalid.test.ts` — Respostas fora do schema rejeitadas
-- `editplan.property-based.test.ts` — Property-based testing
-
-**Editor:**
-- `editor.panels.test.ts` — Cada painel renderiza e aceita input
-- `editor.layers.test.ts` — Hierarquia correta, troca seleção ao clicar
-- `editor.responsive.test.ts` — 3 modos de layout (wide/medium/narrow)
-- `editor.ai-input.test.ts` — Input de texto captura e combina com visual
-- `editor.progress.test.ts` — Progress marker mostra elementos editados
-- `editor.code-box.test.ts` — Code box mostra source do elemento
-
-**Toast UX:**
-- `toast.compact.test.ts` — Toast compacto para `confidence: 'high'`
-- `toast.warning.test.ts` — Toast destaca side effects
-- `toast.alternatives.test.ts` — Toast expande com alternativas para `confidence: 'low'`
-- `toast.combined.test.ts` — Toast distingue mudanças visuais vs texto
-- `toast.express.test.ts` — Modo express pula toast
-
-**Licenciamento:**
-- `license.check.test.ts` — Key válida/inválida/sem key
-- `license.grace.test.ts` — Grace period (< 7 dias permite, > 7 bloqueia)
-- `license.encryption.test.ts` — Key armazenada criptografada
-- `license.tester-limit.test.ts` — Tester limitado a 15 edits/dia
-
-### Testes de segurança (`tests/security/`)
-
-- `security.ws-binding.test.ts` — WebSocket NÃO aceita conexões fora de 127.0.0.1
-- `security.mcp-binding.test.ts` — MCP server NÃO aceita conexões fora de 127.0.0.1
-- `security.ws-token.test.ts` — WebSocket rejeita sem token
-- `security.no-external-requests.test.ts` — NENHUMA request externa exceto Lemon Squeezy
-- `security.license-storage.test.ts` — Licença NÃO em plaintext
-- `security.proxy-isolation.test.ts` — Proxy não expõe headers internos
-- `security.prompt-no-leak.test.ts` — Prompt não é logado
-- `security.no-dangerous-skip.test.ts` — `--dangerously-skip-permissions` ausente
-- `security.plan-no-edit.test.ts` — Plan step sem Edit na allowlist
-
-### Testes e2e (`tests/e2e/`)
-
-- `e2e.full-flow.test.ts` — Fluxo completo: proxy → browser → seleciona (floating brackets) → edita → escreve instrução texto → plan → toast → execute → 3 verificações → commit
-- `e2e.preview.test.ts` — Edição atualiza visual no browser em < 100ms
-- `e2e.layers.test.ts` — Clicar em camadas atualiza editor
-- `e2e.reset.test.ts` — Resetar remove overrides
-- `e2e.multi-edit.test.ts` — Múltiplas edições geram snapshots independentes
-- `e2e.toast-approval.test.ts` — Fluxos de aprovação/cancelamento, modo express
-- `e2e.combined-flow.test.ts` — Visual + texto combinados no mesmo apply
-- `e2e.revert.test.ts` — Botão "Reverter" executa revert do auto-commit
-- `e2e.responsive-editor.test.ts` — Editor adapta nos 3 modos de largura
-- `e2e.frameworks.test.ts` — Fluxo completo contra React+Vite, Next.js, Vue+Vite, Nuxt, HTML vanilla
-
-### Testes de verificação pós-aplicação (`tests/unit/`)
-
-- `verification.visual.test.ts` — getComputedStyle pós-edit vs expected (>5px, >15 RGB)
-- `verification.visual-text.test.ts` — Verificação diferenciada: visual estrita, texto leve
-- `verification.scope.test.ts` — Scope leak em irmãos não previstos
-- `verification.scope-expected.test.ts` — Mudanças previstas confirmadas
-- `verification.diff-audit.test.ts` — Git diff vs plan.files
-- `verification.diff-extras.test.ts` — Arquivos extras logados com aviso
-- `verification.correction.test.ts` — Correction pass automático com prompt de divergências
-- `verification.max-retries.test.ts` — Após 2 correction attempts, para e mostra ao dev
-- `verification.auto-commit.test.ts` — Auto-commit `editup: <summary>` com metadados
+Os testes vivem em `tests/unit/`, `tests/e2e/` e `tests/security/`.
 
 ## Observabilidade
 

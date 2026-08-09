@@ -5,7 +5,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "happy-dom",
-    include: ["tests/unit/**/*.test.ts", "tests/security/**/*.test.ts"],
+    include: [
+      "tests/unit/**/*.test.{ts,tsx}",
+      "tests/security/**/*.test.{ts,tsx}",
+    ],
     exclude: ["tests/e2e/**", "node_modules/**", "landing/**"],
     coverage: {
       provider: "v8",

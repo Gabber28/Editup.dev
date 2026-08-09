@@ -5,6 +5,7 @@ import {
   waitForToast,
   approveToast,
   rejectToast,
+  makeEdit,
 } from "./helpers/e2e-helpers.js";
 import { getInvokeCalls } from "./helpers/tauri-mock.js";
 
@@ -12,7 +13,7 @@ test.describe("E2E toast approval: approve, reject, and express mode", () => {
   test("toast shows plan summary and file count", async ({ page }) => {
     await navigateToEditor(page);
 
-    await page.locator(".panel-content input[type='text']").first().fill("red");
+    await makeEdit(page);
     await clickApply(page);
 
     await waitForToast(page);
@@ -25,7 +26,7 @@ test.describe("E2E toast approval: approve, reject, and express mode", () => {
   test("clicking Apply in toast proceeds to execution", async ({ page }) => {
     await navigateToEditor(page);
 
-    await page.locator(".panel-content input[type='text']").first().fill("red");
+    await makeEdit(page);
     await clickApply(page);
     await waitForToast(page);
     await approveToast(page);
@@ -36,7 +37,7 @@ test.describe("E2E toast approval: approve, reject, and express mode", () => {
   test("clicking Cancel rejects without executing", async ({ page }) => {
     await navigateToEditor(page);
 
-    await page.locator(".panel-content input[type='text']").first().fill("red");
+    await makeEdit(page);
     await clickApply(page);
     await waitForToast(page);
     await rejectToast(page);
@@ -49,7 +50,7 @@ test.describe("E2E toast approval: approve, reject, and express mode", () => {
   test("Enter key approves the toast", async ({ page }) => {
     await navigateToEditor(page);
 
-    await page.locator(".panel-content input[type='text']").first().fill("red");
+    await makeEdit(page);
     await clickApply(page);
     await waitForToast(page);
     await page.keyboard.press("Enter");

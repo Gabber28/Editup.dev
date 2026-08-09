@@ -9,11 +9,11 @@ describe("ApprovalToast — side-effect warnings", () => {
       side_effects: ["Shared .btn class may affect other buttons"],
     });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.getByText(/Side effects/)).toBeTruthy();
     expect(
-      screen.getByText(/Shared \.btn class may affect other buttons/),
+      screen.getByText(/Shared \.btn class may affect other buttons/)
     ).toBeTruthy();
   });
 
@@ -22,7 +22,7 @@ describe("ApprovalToast — side-effect warnings", () => {
       side_effects: ["Affects navbar", "Changes global token"],
     });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     const el = screen.getByText(/Affects navbar; Changes global token/);
     expect(el).toBeTruthy();
@@ -32,21 +32,22 @@ describe("ApprovalToast — side-effect warnings", () => {
     const plan = makePlan({
       side_effects: ["Leaks to siblings"],
     });
-    const { container } = render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+    render(
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
-    const sideEffectEl = container.querySelector(
-      "[style*='color']",
-    ) as HTMLElement | null;
-    expect(sideEffectEl).not.toBeNull();
-    const text = sideEffectEl?.textContent ?? "";
-    expect(text).toContain("Side effects");
+
+    // Query the side-effect line directly: a bare [style*='color'] selector
+    // matches the file-name line first, which is muted, not accented.
+    const sideEffectEl = screen.getByText(/Side effects/);
+    expect(sideEffectEl.getAttribute("style")).toContain(
+      "--color-accent-light"
+    );
   });
 
   it("does not render side-effect section when array is empty", () => {
     const plan = makePlan({ side_effects: [] });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.queryByText(/Side effects/)).toBeNull();
   });
@@ -60,7 +61,7 @@ describe("ApprovalToast — side-effect warnings", () => {
       side_effects: ["Global token change"],
     });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.getByText(/2 files/)).toBeTruthy();
     expect(screen.getByText(/Global token change/)).toBeTruthy();
@@ -73,7 +74,7 @@ describe("ApprovalToast — side-effect warnings", () => {
       recommended_action: "review_first",
     });
     render(
-      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />,
+      <ApprovalToast plan={plan} onApprove={vi.fn()} onReject={vi.fn()} />
     );
     expect(screen.getByText(/Side effects/)).toBeTruthy();
     expect(screen.getByText(/May break layout/)).toBeTruthy();

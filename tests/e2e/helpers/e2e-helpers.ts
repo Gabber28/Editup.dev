@@ -19,7 +19,7 @@ export async function navigateToEditor(page: Page): Promise<void> {
   await page.locator(".setup-btn").first().click();
 
   await setAgentConnected(page, true);
-  await page.waitForSelector('text=Agent connected', { timeout: 5000 });
+  await page.waitForSelector("text=Agent connected", { timeout: 5000 });
 
   const rootInput = page.locator(".setup-input").first();
   await rootInput.fill("C:\\Users\\test\\project");
@@ -28,6 +28,31 @@ export async function navigateToEditor(page: Page): Promise<void> {
   await page.waitForSelector(".editor-shell", { timeout: 5000 });
   await emitSnapshot(page);
   await page.waitForSelector(".element-identity__tag", { timeout: 5000 });
+}
+
+/**
+ * Open a panel by its button in the top bar.
+ *
+ * @param page Playwright page
+ * @param label Button label, e.g. "Spacing"
+ */
+export async function openPanel(page: Page, label: string): Promise<void> {
+  await page.locator(`.panel-tabs__tab:has-text("${label}")`).click();
+}
+
+/**
+ * Make one property edit so Apply becomes enabled.
+ *
+ * Uses Spacing deliberately: it is plain text inputs that emit on every change.
+ * The first tab (Layout) commits its rotation field only on Enter/blur, and
+ * Colors is a swatch + popover — neither works as a generic "just edit something".
+ *
+ * @param page Playwright page
+ * @param value CSS value to type
+ */
+export async function makeEdit(page: Page, value = "12px"): Promise<void> {
+  await openPanel(page, "Spacing");
+  await page.locator(".panel-content input[type='text']").first().fill(value);
 }
 
 export async function clickApply(page: Page): Promise<void> {
@@ -41,7 +66,7 @@ export async function waitForToast(page: Page): Promise<void> {
 }
 
 export async function approveToast(page: Page): Promise<void> {
-  await page.locator('.toast__btn--primary').click();
+  await page.locator(".toast__btn--primary").click();
 }
 
 export async function rejectToast(page: Page): Promise<void> {
@@ -51,7 +76,7 @@ export async function rejectToast(page: Page): Promise<void> {
 export async function waitForPhase(
   page: Page,
   text: string,
-  timeout = 10_000,
+  timeout = 10_000
 ): Promise<void> {
   await page.waitForSelector(`text=${text}`, { timeout });
 }

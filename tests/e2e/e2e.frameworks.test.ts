@@ -1,15 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { gotoApp } from "./helpers/e2e-helpers.js";
-import {
-  injectTauriMock,
-  setAgentConnected,
-  emitSnapshot,
-} from "./helpers/tauri-mock.js";
+import { gotoApp, makeEdit } from "./helpers/e2e-helpers.js";
+import { setAgentConnected } from "./helpers/tauri-mock.js";
 
 async function setupEditorWithFramework(
   page: import("@playwright/test").Page,
   framework: string,
-  classes: string[] = ["btn"],
+  classes: string[] = ["btn"]
 ): Promise<void> {
   await gotoApp(page);
 
@@ -34,6 +30,7 @@ async function setupEditorWithFramework(
           component_name: "Card",
           source_file: `src/Card.${fw === "plain-css" ? "html" : "tsx"}`,
           source_line: 5,
+          has_text: true,
         },
         styling: {
           framework: fw,
@@ -52,26 +49,39 @@ async function setupEditorWithFramework(
           "font-weight": "400",
         },
       };
-      const emit = (window as Record<string, unknown>).__TAURI_TEST_EMIT__ as
-        (ev: string, p: unknown) => void;
+      // Store first: the app reads snapshots by polling get_latest_snapshot.
+      const st = (window as unknown as Record<string, unknown>)
+        .__MOCK_STATE__ as { latestSnapshot: unknown } | undefined;
+      if (st) st.latestSnapshot = snap;
+
+      const emit = (window as unknown as Record<string, unknown>)
+        .__TAURI_TEST_EMIT__ as (ev: string, p: unknown) => void;
       if (emit) emit("agent_snapshot", snap);
     },
-    { fw: framework, cls: classes },
+    { fw: framework, cls: classes }
   );
 
   await page.waitForSelector(".element-identity__tag", { timeout: 5000 });
 }
 
 test.describe("E2E frameworks: flow with different styling frameworks", () => {
-  test("tailwind framework — element with tailwind classes", async ({ page }) => {
-    await setupEditorWithFramework(page, "tailwind", ["bg-white", "p-4", "rounded"]);
+  test("tailwind framework — element with tailwind classes", async ({
+    page,
+  }) => {
+    await setupEditorWithFramework(page, "tailwind", [
+      "bg-white",
+      "p-4",
+      "rounded",
+    ]);
 
     const identity = page.locator(".element-identity__tag");
     await expect(identity).toContainText("div");
     await expect(identity).toContainText(".bg-white");
   });
 
-  test("css-modules framework — element with module classes", async ({ page }) => {
+  test("css-modules framework — element with module classes", async ({
+    page,
+  }) => {
     await setupEditorWithFramework(page, "css-modules", ["card_abc123"]);
 
     const identity = page.locator(".element-identity__tag");
@@ -105,14 +115,16 @@ test.describe("E2E frameworks: flow with different styling frameworks", () => {
 
   test("editing works across all frameworks", async ({ page }) => {
     const frameworks = [
-      "tailwind", "css-modules", "plain-css",
-      "styled-components", "css-variables",
+      "tailwind",
+      "css-modules",
+      "plain-css",
+      "styled-components",
+      "css-variables",
     ];
     for (const fw of frameworks) {
       await setupEditorWithFramework(page, fw);
 
-      const colorInputs = page.locator(".panel-content input[type='text']");
-      await colorInputs.first().fill("red");
+      await makeEdit(page);
 
       const applyBtn = page.locator(".apply-bar__btn--primary");
       await expect(applyBtn).toBeEnabled();
