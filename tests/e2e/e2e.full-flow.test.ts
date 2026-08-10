@@ -33,10 +33,14 @@ test.describe("E2E full flow: proxy → edit → plan → toast → execute → 
     expect(calls.length).toBeGreaterThanOrEqual(1);
 
     await setAgentConnected(page, true);
-    await page.waitForSelector("text=Agent connected", { timeout: 5000 });
+    await page.waitForSelector('button:has-text("Start Editing")', {
+      timeout: 5000,
+    });
 
     const rootInput = page.locator(".setup-input").first();
     await rootInput.fill("C:\\Users\\test\\project");
+    // The banner appears only once there is a root to judge.
+    await expect(page.locator(".setup-status")).toBeVisible();
     await page.locator('button:has-text("Start Editing")').click();
 
     await page.waitForSelector(".editor-shell", { timeout: 5000 });

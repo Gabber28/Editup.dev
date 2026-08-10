@@ -14,7 +14,9 @@ async function setupEditorWithFramework(
   await page.locator(".setup-btn").first().click();
 
   await setAgentConnected(page, true);
-  await page.waitForSelector("text=Agent connected", { timeout: 5000 });
+  await page.waitForSelector('button:has-text("Start Editing")', {
+    timeout: 5000,
+  });
 
   const rootInput = page.locator(".setup-input").first();
   await rootInput.fill("C:\\project");

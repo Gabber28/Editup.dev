@@ -3,6 +3,7 @@ pub mod commands;
 pub mod git;
 pub mod history;
 pub mod license;
+pub mod project_root;
 pub mod proxy;
 pub mod rate_limit;
 pub mod security;
@@ -69,6 +70,7 @@ pub fn run() {
             commands::get_target_origin,
             commands::set_project_root,
             commands::get_project_root,
+            project_root::validate_project_root,
             commands::get_agent_status,
             commands::get_latest_snapshot,
             commands::start_editing,

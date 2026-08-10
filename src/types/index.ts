@@ -22,8 +22,6 @@ export type {
 
 export type { ExecuteResult, VerificationResult } from "./execute.js";
 
-export type {
-  LicensePlan,
-  LicenseStatus,
-  RateLimitState,
-} from "./license.js";
+export type { LicensePlan, LicenseStatus, RateLimitState } from "./license.js";
+
+export type { RootVerdict, RootCheck } from "./project-root.js";

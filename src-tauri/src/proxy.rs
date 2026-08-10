@@ -511,7 +511,7 @@ fn has_source(directive: &str, source: &str) -> bool {
     directive.split_whitespace().any(|t| t == source)
 }
 
-fn upstream_client() -> reqwest::Client {
+pub(crate) fn upstream_client() -> reqwest::Client {
     static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
     CLIENT
         .get_or_init(|| {

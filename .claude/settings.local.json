@@ -112,7 +112,20 @@
       "Bash(echo \"exit=$?\")",
       "Bash(node -e ' *)",
       "Bash(git checkout *)",
-      "Bash(git status *)"
+      "Bash(git status *)",
+      "Bash(echo \"exit=$? \\(0 = limpo\\)\")",
+      "Bash(sed -i 's|import { AlignmentRow, TransformRow, FlipRow } from \"./position-rows.js\";|import { AlignmentRow } from \"./position-align-row.js\";\\\\nimport { TransformRow, FlipRow } from \"./position-rows.js\";|' src/components/editor/panels/position-controls.tsx)",
+      "Bash(git push *)",
+      "Bash(cargo --version)",
+      "Bash(rustc --version)",
+      "Bash(pnpm --version)",
+      "Bash(cargo fmt *)",
+      "Bash(rustfmt --edition 2021 src/project_root.rs src/project_root/evidence.rs src/project_root/tests.rs)",
+      "Bash(pnpm test:e2e)",
+      "Bash(NODE_PATH=\"C:/Users/gabri/Documents/codigos/SaaS's/Editup.dev/node_modules\" node --experimental-default-type=module shot.mjs)",
+      "Bash(cp \"C:/Users/gabri/AppData/Local/Temp/claude/C--Users-gabri-Documents-codigos-SaaS-s-Editup-dev/8581f502-7b2a-4017-af1c-48aa99b5a1a9/scratchpad/shot.mjs\" ./.tmp-shot.mjs)",
+      "Bash(node .tmp-shot.mjs)",
+      "Bash(rm -f ./.tmp-shot.mjs)"
     ]
   }
 }
