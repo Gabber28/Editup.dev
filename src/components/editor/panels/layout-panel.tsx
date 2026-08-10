@@ -1,6 +1,6 @@
 import type { JSX } from "react";
-import type { ElementInfo } from "@/types/snapshot.js";
-import { PropRow, SelectRow, SectionLabel } from "./prop-row.js";
+import type { ElementInfo, MatchingRule } from "@/types/snapshot.js";
+import { SelectRow, SectionLabel } from "./prop-row.js";
 import { PositionControls } from "./position-controls.js";
 
 export interface LayoutPanelProps {
@@ -8,20 +8,35 @@ export interface LayoutPanelProps {
   onChange(property: string, value: string): void;
   /** Selected element — supplies the parent layout the Position controls need. */
   element?: ElementInfo | null;
+  /** This element+state's own edits, for the authored/computed distinction. */
+  overrides?: Record<string, string>;
+  /** Rules governing the element, for the authored/computed distinction. */
+  rules?: readonly MatchingRule[];
+  /** Removes a declaration, rather than writing a literal `auto`. */
+  onClear?(property: string): void;
 }
 
 const DISPLAYS = [
-  "block", "flex", "grid", "inline", "inline-block",
-  "inline-flex", "inline-grid", "none",
+  "block",
+  "flex",
+  "grid",
+  "inline",
+  "inline-block",
+  "inline-flex",
+  "inline-grid",
+  "none",
 ];
 const FLEX_DIRECTIONS = ["row", "row-reverse", "column", "column-reverse"];
 const JUSTIFY = [
-  "flex-start", "flex-end", "center",
-  "space-between", "space-around", "space-evenly",
+  "flex-start",
+  "flex-end",
+  "center",
+  "space-between",
+  "space-around",
+  "space-evenly",
 ];
 const ALIGN = ["flex-start", "flex-end", "center", "stretch", "baseline"];
 const FLEX_WRAPS = ["nowrap", "wrap", "wrap-reverse"];
-const POSITIONS = ["static", "relative", "absolute", "fixed", "sticky"];
 const OVERFLOWS = ["visible", "hidden", "scroll", "auto"];
 
 /** Identity of the selected element, used to reset per-element control state. */
@@ -32,14 +47,6 @@ function elementKey(el?: ElementInfo | null): string {
 
 export function LayoutPanel(props: LayoutPanelProps): JSX.Element {
   const { values, onChange } = props;
-  const r = (label: string, prop: string): JSX.Element => (
-    <PropRow
-      key={prop}
-      label={label}
-      value={values[prop] ?? ""}
-      onChange={(v): void => onChange(prop, v)}
-    />
-  );
   const s = (label: string, prop: string, opts: string[]): JSX.Element => (
     <SelectRow
       key={prop}
@@ -59,20 +66,18 @@ export function LayoutPanel(props: LayoutPanelProps): JSX.Element {
       {s("Align", "align-items", ALIGN)}
       {s("Wrap", "flex-wrap", FLEX_WRAPS)}
 
-      <SectionLabel>Position</SectionLabel>
+      {/* The Position block owns the mode select, the offsets and z-index — the
+          separate rows that used to duplicate them are gone. */}
       <PositionControls
         // Re-keyed per element so no transient hint carries over on reselect.
         key={elementKey(props.element)}
         element={props.element ?? null}
         values={values}
+        {...(props.overrides ? { overrides: props.overrides } : {})}
+        {...(props.rules ? { rules: props.rules } : {})}
         onChange={onChange}
+        {...(props.onClear ? { onClear: props.onClear } : {})}
       />
-      {s("Position", "position", POSITIONS)}
-      {r("Top", "top")}
-      {r("Right", "right")}
-      {r("Bottom", "bottom")}
-      {r("Left", "left")}
-      {r("Z-Index", "z-index")}
 
       <SectionLabel>Overflow</SectionLabel>
       {s("Overflow X", "overflow-x", OVERFLOWS)}

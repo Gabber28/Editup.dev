@@ -7,7 +7,12 @@ import {
   detectFramework,
 } from "./style-capture.js";
 import { lookupReactFiber } from "./source-map.js";
-import { buildDomPath, domIndex, textPreview, ancestorPath } from "./dom-path.js";
+import {
+  buildDomPath,
+  domIndex,
+  textPreview,
+  ancestorPath,
+} from "./dom-path.js";
 
 export interface SnapshotPayload {
   element: {
@@ -18,7 +23,14 @@ export interface SnapshotPayload {
     source_file: string | undefined;
     source_line: number | undefined;
     media: {
-      kind: "img" | "background" | "svg" | "svg-use" | "icon-font" | "emoji" | "none";
+      kind:
+        | "img"
+        | "background"
+        | "svg"
+        | "svg-use"
+        | "icon-font"
+        | "emoji"
+        | "none";
       url?: string;
       text?: string;
       iconClass?: string;
@@ -42,6 +54,7 @@ export interface SnapshotPayload {
       offset: { left: number; top: number };
       size: { width: number; height: number };
       parent: { tag: string; display: string; flex_direction: string } | null;
+      containing_block: { label: string; tag: string } | null;
     };
   };
   styling: {
@@ -88,13 +101,25 @@ type MediaCapture = SnapshotPayload["element"]["media"];
 
 // Prefixes whose "<prefix>name" class names the specific glyph (fa-star, bi-heart).
 const ICON_TOKEN_PREFIXES = ["fa-", "bi-", "ph-", "icon-"];
-const ICON_FONT_HINTS = ["fontawesome", "font awesome", "material icons", "material symbols", "bootstrap-icons", "phosphor", "ionicons"];
+const ICON_FONT_HINTS = [
+  "fontawesome",
+  "font awesome",
+  "material icons",
+  "material symbols",
+  "bootstrap-icons",
+  "phosphor",
+  "ionicons",
+];
 const EMOJI_RE = /\p{Extended_Pictographic}/u;
 
 /** Finds the icon-token class (e.g. "fa-star") among the element's classes. */
 function iconTokenOf(el: Element): string | undefined {
   for (const cls of Array.from(el.classList)) {
-    if (ICON_TOKEN_PREFIXES.some((p) => cls.startsWith(p) && cls.length > p.length)) {
+    if (
+      ICON_TOKEN_PREFIXES.some(
+        (p) => cls.startsWith(p) && cls.length > p.length
+      )
+    ) {
       return cls;
     }
   }
@@ -125,16 +150,24 @@ function captureMedia(el: Element): MediaCapture {
   if (svg) {
     const use = svg.querySelector("use");
     if (use) {
-      const href = use.getAttribute("href") ?? use.getAttribute("xlink:href") ?? "";
+      const href =
+        use.getAttribute("href") ?? use.getAttribute("xlink:href") ?? "";
       return { kind: "svg-use", url: href };
     }
     const inner = svg.innerHTML;
-    return { kind: "svg", svgMarkup: inner.length > 2000 ? `${inner.slice(0, 2000)}…` : inner };
+    return {
+      kind: "svg",
+      svgMarkup: inner.length > 2000 ? `${inner.slice(0, 2000)}…` : inner,
+    };
   }
 
   const token = iconTokenOf(el);
   if (token || usesIconFont(el)) {
-    return { kind: "icon-font", iconClass: token ?? "", text: el.textContent?.trim() ?? "" };
+    return {
+      kind: "icon-font",
+      iconClass: token ?? "",
+      text: el.textContent?.trim() ?? "",
+    };
   }
 
   const text = el.textContent?.trim() ?? "";
@@ -158,7 +191,11 @@ function captureMedia(el: Element): MediaCapture {
  * @param el Selected element
  * @returns The button kind plus current href/target
  */
-function captureButton(el: Element): { kind: "anchor" | "button" | "none"; href: string; target: string } {
+function captureButton(el: Element): {
+  kind: "anchor" | "button" | "none";
+  href: string;
+  target: string;
+} {
   const anchor = el instanceof HTMLAnchorElement ? el : el.closest("a");
   if (anchor) {
     return {
@@ -170,7 +207,8 @@ function captureButton(el: Element): { kind: "anchor" | "button" | "none"; href:
   const isButton =
     el instanceof HTMLButtonElement ||
     el.getAttribute("role") === "button" ||
-    (el instanceof HTMLInputElement && ["button", "submit", "reset"].includes(el.type)) ||
+    (el instanceof HTMLInputElement &&
+      ["button", "submit", "reset"].includes(el.type)) ||
     el.closest("button") !== null;
   if (isButton) {
     return { kind: "button", href: "", target: "" };
@@ -187,6 +225,40 @@ function captureButton(el: Element): { kind: "anchor" | "button" | "none"; href:
  * @param el Selected element
  * @returns Offset from the offset parent, box size, and the parent's layout mode
  */
+/** How an element is named in the containing-block label: `.card`, `#hero`, `section`. */
+function shortLabel(el: Element): string {
+  if (el.id) return `#${el.id}`;
+  const cls = Array.from(el.classList)[0];
+  if (cls) return `.${cls}`;
+  return el.tagName.toLowerCase();
+}
+
+/**
+ * The element whose box the offsets are measured against.
+ *
+ * `top/right/bottom/left` mean nothing without it — 24px from *what* edge. For
+ * `absolute` that is the nearest ancestor with a position other than static;
+ * for `sticky` it is the nearest scrollable ancestor. Returns null when the
+ * chain runs out, which the panel reads as the document/viewport.
+ */
+function captureContainingBlock(
+  el: Element
+): { label: string; tag: string } | null {
+  const position = getComputedStyle(el).position;
+  if (position === "static" || position === "relative") return null;
+
+  const scrollable = position === "sticky";
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    const hit = scrollable
+      ? /auto|scroll|overlay/.test(style.overflowY + style.overflowX)
+      : style.position !== "static";
+    if (hit)
+      return { label: shortLabel(node), tag: node.tagName.toLowerCase() };
+  }
+  return null;
+}
+
 function captureLayout(el: Element): SnapshotPayload["element"]["layout"] {
   const rect = el.getBoundingClientRect();
   const html = el instanceof HTMLElement ? el : null;
@@ -207,6 +279,7 @@ function captureLayout(el: Element): SnapshotPayload["element"]["layout"] {
             flex_direction: parentStyle.flexDirection,
           }
         : null,
+    containing_block: captureContainingBlock(el),
   };
 }
 
@@ -258,7 +331,8 @@ export function buildSnapshotPayload(el: Element): SnapshotPayload {
       media: captureMedia(el),
       button: captureButton(el),
       has_text: Array.from(el.childNodes).some(
-        (n) => n.nodeType === Node.TEXT_NODE && (n.textContent?.trim() ?? "") !== ""
+        (n) =>
+          n.nodeType === Node.TEXT_NODE && (n.textContent?.trim() ?? "") !== ""
       ),
       dom_path: buildDomPath(el),
       dom_index: domIndex(el),

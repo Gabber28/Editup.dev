@@ -75,7 +75,9 @@ function countMatches(selector: string): number {
 export function specificityOf(selector: string): number {
   const first = selector.split(",")[0] ?? selector;
   const ids = (first.match(/#[\w-]+/g) ?? []).length;
-  const classes = (first.match(/\.[\w-]+|\[[^\]]+\]|:[a-z-]+(?![a-z-]*\()/gi) ?? []).length;
+  const classes = (
+    first.match(/\.[\w-]+|\[[^\]]+\]|:[a-z-]+(?![a-z-]*\()/gi) ?? []
+  ).length;
   const tags = (first.match(/(^|[\s>+~])[a-z][\w-]*/gi) ?? []).length;
   return ids * 100 + classes * 10 + tags;
 }
@@ -166,7 +168,11 @@ export function capturePseudoRules(el: Element): CapturedPseudoRule[] {
   const results: CapturedPseudoRule[] = [];
   for (const sheet of Array.from(document.styleSheets)) {
     let cssRules: CSSRuleList | null = null;
-    try { cssRules = sheet.cssRules; } catch { continue; }
+    try {
+      cssRules = sheet.cssRules;
+    } catch {
+      continue;
+    }
     if (!cssRules) continue;
     walkRules(cssRules, normalizeSheetSource(sheet.href), (rule) => {
       if (!(rule instanceof CSSStyleRule)) return;
@@ -178,7 +184,9 @@ export function capturePseudoRules(el: Element): CapturedPseudoRule[] {
       if (!base) return;
       try {
         if (!el.matches(base)) return;
-      } catch { return; }
+      } catch {
+        return;
+      }
       const props: Record<string, string> = {};
       for (let i = 0; i < rule.style.length; i++) {
         const p = rule.style.item(i);
@@ -198,13 +206,35 @@ export function capturePseudoRules(el: Element): CapturedPseudoRule[] {
   return results;
 }
 
+/**
+ * The element's styles as the stylesheets alone define them, with inline styles
+ * (including EditUp's own live previews) stripped.
+ *
+ * The off-screen placement goes on a wrapper, never on the measured clone: an
+ * earlier version set `position:fixed; top:-99999px; left:-99999px` directly on
+ * the clone and then read it back, so every element reported `position: fixed`
+ * and `top/left: -99999px` — the harness measuring itself. The wrapper only
+ * carries non-inherited properties for the same reason: `visibility` and
+ * `pointer-events` inherit, so setting them here would poison the clone too.
+ *
+ * @param el Element to measure
+ * @returns Computed values with nothing contributed by the measurement itself
+ */
 export function captureBaseComputedStyle(el: Element): Record<string, string> {
-  const clone = el.cloneNode(false) as Element;
-  clone.setAttribute("style",
-    "position:fixed!important;top:-99999px!important;left:-99999px!important;" +
-    "visibility:hidden!important;pointer-events:none!important;"
+  const holder = document.createElement("div");
+  holder.setAttribute(
+    "style",
+    // width keeps percentage-based values resolving against a viewport-wide
+    // container, as they did when the clone was appended straight to <body>.
+    "position:fixed!important;top:-99999px!important;left:-99999px!important;width:100vw!important;"
   );
-  document.body.appendChild(clone);
+
+  const clone = el.cloneNode(false) as Element;
+  clone.removeAttribute("style");
+
+  holder.appendChild(clone);
+  document.body.appendChild(holder);
+
   const computed = getComputedStyle(clone);
   const out: Record<string, string> = {};
   for (let i = 0; i < computed.length; i++) {
@@ -212,18 +242,20 @@ export function captureBaseComputedStyle(el: Element): Record<string, string> {
     if (!prop) continue;
     out[prop] = computed.getPropertyValue(prop).trim();
   }
-  clone.remove();
+
+  holder.remove();
   return out;
 }
 
-const TAILWIND_HEURISTIC = /^(?:[a-z]+:)?(?:!)?(?:-?[a-z]+(?:-[a-z0-9]+)*)(?:\/[0-9]+)?(?:\[[^\]]+\])?$/;
+const TAILWIND_HEURISTIC =
+  /^(?:[a-z]+:)?(?:!)?(?:-?[a-z]+(?:-[a-z0-9]+)*)(?:\/[0-9]+)?(?:\[[^\]]+\])?$/;
 
 export function detectFramework(el: Element): CapturedStyling["framework"] {
   const classList = Array.from(el.classList);
-  const tailwindLike = classList.filter((c) =>
-    TAILWIND_HEURISTIC.test(c)
+  const tailwindLike = classList.filter((c) => TAILWIND_HEURISTIC.test(c));
+  const cssModulesLike = classList.filter(
+    (c) => /_/.test(c) && /[a-zA-Z0-9]{4,}$/.test(c)
   );
-  const cssModulesLike = classList.filter((c) => /_/.test(c) && /[a-zA-Z0-9]{4,}$/.test(c));
 
   if (tailwindLike.length >= classList.length / 2 && classList.length > 0) {
     return "tailwind";

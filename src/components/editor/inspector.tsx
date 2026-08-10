@@ -1,5 +1,9 @@
 import { useState, type JSX } from "react";
-import type { ElementInfo, PseudoState } from "@/types/snapshot.js";
+import type {
+  ElementInfo,
+  MatchingRule,
+  PseudoState,
+} from "@/types/snapshot.js";
 import { SECTIONS } from "./sections.js";
 import { PanelTabs, type PanelTab } from "./panel-tabs.js";
 import { StateSelector } from "./state-selector.js";
@@ -11,6 +15,12 @@ export interface InspectorProps {
   element: ElementInfo | null;
   values: Record<string, string>;
   onChange(property: string, value: string): void;
+  /** This element+state's own edits, kept separate from the merged values. */
+  overrides?: Record<string, string>;
+  /** Rules governing the element, so panels can tell authored from computed. */
+  rules?: readonly MatchingRule[];
+  /** Removes a declaration entirely, rather than writing a literal `auto`. */
+  onClear?(property: string): void;
   pseudo: {
     availableStates: PseudoState[];
     activeState: PseudoState;
@@ -32,6 +42,9 @@ export function Inspector(props: InspectorProps): JSX.Element {
     element: props.element,
     values: props.values,
     onChange: props.onChange,
+    ...(props.overrides ? { overrides: props.overrides } : {}),
+    ...(props.rules ? { rules: props.rules } : {}),
+    ...(props.onClear ? { onClear: props.onClear } : {}),
   };
   const visible = SECTIONS.filter((s) => s.applies(props.element));
 

@@ -50,6 +50,12 @@ export interface ElementLayout {
   offset: { left: number; top: number };
   size: { width: number; height: number };
   parent: ElementParentLayout | null;
+  /**
+   * The box `top/right/bottom/left` are measured against, named for display.
+   * Null when the chain runs out (document) or the mode has no containing
+   * block worth naming (`static`, `relative`).
+   */
+  containing_block?: { label: string; tag: string } | null;
 }
 
 export interface ElementInfo {

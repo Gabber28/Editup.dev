@@ -41,7 +41,12 @@ function toDegrees(value: number, unit: string | undefined): number {
 
 /** Reads the rotation/flip/translation out of a `matrix()` or `matrix3d()` value. */
 function fromMatrix(match: RegExpExecArray): TransformState {
-  const idle: TransformState = { rotate: 0, flipX: false, flipY: false, translate: "" };
+  const idle: TransformState = {
+    rotate: 0,
+    flipX: false,
+    flipY: false,
+    translate: "",
+  };
   const parts = (match[2] ?? "").split(",").map((n) => Number(n.trim()));
   if (parts.some((n) => !Number.isFinite(n))) return idle;
 
@@ -110,7 +115,12 @@ function fromFunctions(value: string): TransformState {
  * @returns Rotation in degrees plus horizontal/vertical mirror flags
  */
 export function parseTransform(computed: string): TransformState {
-  const idle: TransformState = { rotate: 0, flipX: false, flipY: false, translate: "" };
+  const idle: TransformState = {
+    rotate: 0,
+    flipX: false,
+    flipY: false,
+    translate: "",
+  };
   if (!computed || computed === "none") return idle;
 
   const matrix = MATRIX_RE.exec(computed);

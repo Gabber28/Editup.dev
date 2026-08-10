@@ -19,17 +19,36 @@ const FLEX_SELF: Record<AlignMode, string> = {
 function marginPairs(axis: AlignAxis, mode: AlignMode): Pair[] {
   const from = axis === "h" ? "margin-left" : "margin-top";
   const to = axis === "h" ? "margin-right" : "margin-bottom";
-  if (mode === "start") return [[from, "0px"], [to, "auto"]];
-  if (mode === "end") return [[from, "auto"], [to, "0px"]];
-  return [[from, "auto"], [to, "auto"]];
+  if (mode === "start")
+    return [
+      [from, "0px"],
+      [to, "auto"],
+    ];
+  if (mode === "end")
+    return [
+      [from, "auto"],
+      [to, "0px"],
+    ];
+  return [
+    [from, "auto"],
+    [to, "auto"],
+  ];
 }
 
 /** Inset + auto-margin pairs that place an absolutely positioned box. */
 function insetPairs(axis: AlignAxis, mode: AlignMode): Pair[] {
   const from = axis === "h" ? "left" : "top";
   const to = axis === "h" ? "right" : "bottom";
-  if (mode === "start") return [[from, "0px"], [to, "auto"]];
-  if (mode === "end") return [[from, "auto"], [to, "0px"]];
+  if (mode === "start")
+    return [
+      [from, "0px"],
+      [to, "auto"],
+    ];
+  if (mode === "end")
+    return [
+      [from, "auto"],
+      [to, "0px"],
+    ];
   return [[from, "0px"], [to, "0px"], ...marginPairs(axis, "center")];
 }
 
@@ -49,9 +68,10 @@ export function resolveAlign(
   axis: AlignAxis,
   mode: AlignMode,
   element: ElementInfo | null | undefined,
-  values: Record<string, string>,
+  values: Record<string, string>
 ): Pair[] {
-  if (ABSOLUTE.includes(values["position"] ?? "")) return insetPairs(axis, mode);
+  if (ABSOLUTE.includes(values["position"] ?? ""))
+    return insetPairs(axis, mode);
 
   const parent = element?.layout?.parent ?? null;
   const display = parent?.display ?? "";
@@ -63,7 +83,9 @@ export function resolveAlign(
   if (FLEX.includes(display)) {
     const column = (parent?.flex_direction ?? "row").startsWith("column");
     const isMainAxis = column ? axis === "v" : axis === "h";
-    return isMainAxis ? marginPairs(axis, mode) : [["align-self", FLEX_SELF[mode]]];
+    return isMainAxis
+      ? marginPairs(axis, mode)
+      : [["align-self", FLEX_SELF[mode]]];
   }
 
   return marginPairs(axis, mode);
@@ -79,7 +101,7 @@ export function resolveAlign(
  */
 export function verticalAlignSupported(
   element: ElementInfo | null | undefined,
-  values: Record<string, string>,
+  values: Record<string, string>
 ): boolean {
   if (ABSOLUTE.includes(values["position"] ?? "")) return true;
   const display = element?.layout?.parent?.display ?? "";
@@ -98,7 +120,7 @@ export function verticalAlignSupported(
 export function coordOf(
   values: Record<string, string>,
   prop: "left" | "top",
-  fallback: number,
+  fallback: number
 ): string {
   const raw = values[prop];
   if (!raw || raw === "auto") return String(fallback);

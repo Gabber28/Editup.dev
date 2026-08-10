@@ -1,201 +1,119 @@
-import { useState, type JSX } from "react";
-import type { ElementInfo } from "@/types/snapshot.js";
-import { parseTransform, buildTransform, type TransformState } from "@/lib/transform.js";
+import type { JSX } from "react";
+import type { ElementInfo, MatchingRule } from "@/types/snapshot.js";
+import { AlignmentRow } from "./position-align-row.js";
+import { TransformRow, FlipRow } from "./position-rows.js";
+import { PositionBox, offsetSummary, type Side } from "./position-box.js";
+import { PositionLayer } from "./position-layer.js";
+import { SectionGroup } from "../section-group.js";
 import {
-  resolveAlign,
-  verticalAlignSupported,
-  coordOf,
-  type AlignAxis,
-  type AlignMode,
-} from "./position-align.js";
-import { AlignIcon, RotateIcon, FlipXIcon, FlipYIcon, AngleIcon } from "./position-icons.js";
-import {
-  POS_ROW,
-  POS_LABEL,
-  POS_INPUT,
-  POS_FIELD,
-  POS_BTN,
-  POS_GROUP,
-  POS_HINT,
-  activeBtn,
-} from "./position-styles.js";
+  POS_HEADER,
+  POS_TITLE,
+  POS_MODE_SELECT,
+  POS_DIVIDER,
+} from "./position-box-styles.js";
+
+/** Raw CSS keywords: the value lands in the source, so it must be recognisable in a diff. */
+const POSITIONS = ["static", "relative", "absolute", "fixed", "sticky"];
 
 export interface PositionControlsProps {
   element?: ElementInfo | null;
+  /** Effective values (computed, then authored, then this session's edits). */
   values: Record<string, string>;
+  /** Only this element+state's own edits — needed to tell authored from computed. */
+  overrides?: Record<string, string>;
+  /** Rules governing the element, for the authored/computed distinction. */
+  rules?: readonly MatchingRule[];
   onChange(property: string, value: string): void;
-}
-
-const MODES: AlignMode[] = ["start", "center", "end"];
-const TITLES: Record<AlignAxis, Record<AlignMode, string>> = {
-  h: { start: "Align left", center: "Align horizontal center", end: "Align right" },
-  v: { start: "Align top", center: "Align vertical center", end: "Align bottom" },
-};
-
-function AlignmentRow(props: PositionControlsProps): JSX.Element {
-  const vOk = verticalAlignSupported(props.element, props.values);
-  const click = (axis: AlignAxis, mode: AlignMode): void => {
-    for (const [prop, value] of resolveAlign(axis, mode, props.element, props.values)) {
-      props.onChange(prop, value);
-    }
-  };
-
-  const group = (axis: AlignAxis): JSX.Element => (
-    <div style={POS_GROUP}>
-      {MODES.map((mode) => (
-        <button
-          key={`${axis}-${mode}`}
-          type="button"
-          aria-label={TITLES[axis][mode]}
-          title={
-            axis === "v" && !vOk ? "Requires a flex or grid parent" : TITLES[axis][mode]
-          }
-          disabled={axis === "v" && !vOk}
-          onClick={(): void => click(axis, mode)}
-          style={{ ...POS_BTN, opacity: axis === "v" && !vOk ? 0.35 : 1 }}
-        >
-          <AlignIcon axis={axis} mode={mode} />
-        </button>
-      ))}
-    </div>
-  );
-
-  return (
-    <div style={POS_ROW}>
-      <span style={POS_LABEL}>Alignment</span>
-      <div style={{ display: "flex", gap: 10 }}>
-        {group("h")}
-        {group("v")}
-      </div>
-    </div>
-  );
-}
-
-function XYRow(props: PositionControlsProps): JSX.Element {
-  const offset = props.element?.layout?.offset ?? { left: 0, top: 0 };
-  const isStatic = (props.values["position"] ?? "static") === "static";
-  const [promoted, setPromoted] = useState(false);
-
-  const commit = (prop: "left" | "top", raw: string, current: string): void => {
-    const n = parseFloat(raw);
-    // Leaving the field untouched must not write anything — otherwise a stray
-    // focus would silently promote a static element to relative.
-    if (!Number.isFinite(n) || raw.trim() === current) return;
-    if (isStatic) {
-      props.onChange("position", "relative");
-      setPromoted(true);
-    }
-    props.onChange(prop, `${n}px`);
-  };
-
-  const field = (label: string, prop: "left" | "top", fallback: number): JSX.Element => {
-    const current = coordOf(props.values, prop, fallback);
-    return (
-      <label style={POS_FIELD}>
-        <span style={{ ...POS_LABEL, minWidth: 0 }}>{label}</span>
-        <input
-          type="text"
-          defaultValue={current}
-          key={`${prop}-${current}`}
-          onKeyDown={(ev): void => {
-            if (ev.key === "Enter") commit(prop, ev.currentTarget.value, current);
-          }}
-          onBlur={(ev): void => commit(prop, ev.currentTarget.value, current)}
-          style={POS_INPUT}
-        />
-      </label>
-    );
-  };
-
-  return (
-    <div style={POS_ROW}>
-      <span style={POS_LABEL}>Position</span>
-      <div style={{ display: "flex", gap: 8, flex: 1 }}>
-        {field("X", "left", offset.left)}
-        {field("Y", "top", offset.top)}
-      </div>
-      {promoted && <div style={POS_HINT}>position changed to relative</div>}
-    </div>
-  );
-}
-
-function RotationRow(props: PositionControlsProps): JSX.Element {
-  // Derived, never mirrored into local state: the value map is the single
-  // source of truth, so a click always builds on what the element actually has.
-  const state = parseTransform(props.values["transform"] ?? "none");
-
-  const push = (next: TransformState): void => {
-    props.onChange("transform", buildTransform(next));
-  };
-
-  return (
-    <div style={POS_ROW}>
-      <span style={POS_LABEL}>Rotation</span>
-      <label style={{ ...POS_FIELD, flex: 1 }}>
-        <AngleIcon />
-        <input
-          type="text"
-          key={state.rotate}
-          defaultValue={`${state.rotate}°`}
-          onKeyDown={(ev): void => {
-            if (ev.key !== "Enter") return;
-            const n = parseFloat(ev.currentTarget.value);
-            if (Number.isFinite(n)) push({ ...state, rotate: n });
-          }}
-          onBlur={(ev): void => {
-            const n = parseFloat(ev.currentTarget.value);
-            if (Number.isFinite(n) && n !== state.rotate) push({ ...state, rotate: n });
-          }}
-          style={POS_INPUT}
-        />
-      </label>
-      <div style={POS_GROUP}>
-        <button
-          type="button"
-          aria-label="Rotate 90°"
-          title="Rotate 90°"
-          onClick={(): void => push({ ...state, rotate: state.rotate + 90 })}
-          style={POS_BTN}
-        >
-          <RotateIcon />
-        </button>
-        <button
-          type="button"
-          aria-label="Flip horizontal"
-          title="Flip horizontal"
-          onClick={(): void => push({ ...state, flipX: !state.flipX })}
-          style={activeBtn(state.flipX)}
-        >
-          <FlipXIcon />
-        </button>
-        <button
-          type="button"
-          aria-label="Flip vertical"
-          title="Flip vertical"
-          onClick={(): void => push({ ...state, flipY: !state.flipY })}
-          style={activeBtn(state.flipY)}
-        >
-          <FlipYIcon />
-        </button>
-      </div>
-    </div>
-  );
+  /** Removes a declaration entirely, rather than writing a literal `auto`. */
+  onClear?(property: string): void;
 }
 
 /**
- * Figma-style position block: alignment within the parent, X/Y coordinates, and
- * rotation/flip. Every control writes plain CSS through the normal change
- * handler, so edits flow to the AI like any other visual change.
+ * The Position section: mode, alignment, transform, and — unless the element is
+ * `static` — the spatial offset editor and the layer stepper.
  *
- * @param props Selected element, current computed values, and the change handler
- * @returns The alignment, X/Y, and rotation rows
+ * Under `static` the offsets and z-index have no effect at all, so they are
+ * removed rather than shown inert: a control that silently does nothing teaches
+ * the developer to distrust the whole panel.
+ *
+ * @param props Selected element, values, provenance inputs, and handlers
+ * @returns The Position section
  */
 export function PositionControls(props: PositionControlsProps): JSX.Element {
+  const mode = props.values["position"] ?? "static";
+  const isStatic = mode === "static";
+  const overrides = props.overrides ?? {};
+
+  const rowProps = {
+    element: props.element ?? null,
+    values: props.values,
+    onChange: props.onChange,
+  };
+
+  const clear = (prop: string): void => {
+    if (props.onClear) props.onClear(prop);
+    else props.onChange(prop, "auto");
+  };
+
+  const summary = offsetSummary(overrides, props.rules, props.values);
+
   return (
     <div>
-      <AlignmentRow {...props} />
-      <XYRow {...props} />
-      <RotationRow {...props} />
+      <div style={POS_HEADER}>
+        <span style={POS_TITLE}>Position</span>
+        <select
+          aria-label="Position mode"
+          value={POSITIONS.includes(mode) ? mode : "static"}
+          onChange={(ev): void =>
+            props.onChange("position", ev.currentTarget.value)
+          }
+          style={POS_MODE_SELECT}
+        >
+          {POSITIONS.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <AlignmentRow {...rowProps} />
+      <TransformRow {...rowProps} />
+      <FlipRow {...rowProps} />
+
+      {!isStatic && (
+        <>
+          <div style={POS_DIVIDER} />
+          <PositionLayer
+            overrides={overrides}
+            {...(props.rules ? { rules: props.rules } : {})}
+            computed={props.values}
+            onCommit={(value): void => props.onChange("z-index", value)}
+            onClear={(): void => clear("z-index")}
+          />
+          <SectionGroup
+            id="position-advanced"
+            title="Advanced"
+            // Collapsed by default, but an element that arrives already
+            // positioned opens it — a live offset must never be silent. Once
+            // the developer toggles it, their choice is stored and wins.
+            defaultOpen={summary !== ""}
+            {...(summary ? { summary } : {})}
+          >
+            <PositionBox
+              mode={mode}
+              element={props.element ?? null}
+              overrides={overrides}
+              {...(props.rules ? { rules: props.rules } : {})}
+              computed={props.values}
+              onCommit={(side: Side, value): void =>
+                props.onChange(side, value)
+              }
+              onClear={(side: Side): void => clear(side)}
+            />
+          </SectionGroup>
+        </>
+      )}
     </div>
   );
 }

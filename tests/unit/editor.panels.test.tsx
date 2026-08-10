@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ColorsPanel } from "@/components/editor/panels/colors-panel.js";
 import { SpacingPanel } from "@/components/editor/panels/spacing-panel.js";
@@ -16,11 +16,29 @@ import type { ElementInfo } from "@/types/snapshot.js";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
+// SectionGroup persists its open state, so one test would otherwise decide the
+// starting state of the next.
+beforeEach(() => {
+  localStorage.clear();
+});
+
 /** First element with `role`, narrowed — indexing getAllByRole widens to undefined. */
 function firstByRole(role: string): HTMLElement {
   const [el] = screen.getAllByRole(role);
   if (!el) throw new Error(`no element with role "${role}"`);
   return el;
+}
+
+/**
+ * Opens the "Advanced" section the box model now lives in.
+ *
+ * Idempotent on purpose: the section auto-opens for elements that already carry
+ * offsets, so a blind click would collapse it instead.
+ */
+function expandAdvanced(): void {
+  const trigger = screen.getByRole("button", { name: /Advanced/ });
+  if (trigger.getAttribute("aria-expanded") !== "true")
+    fireEvent.click(trigger);
 }
 
 describe("PropRow", () => {
@@ -164,13 +182,24 @@ describe("LayoutPanel", () => {
     expect(onChange).toHaveBeenCalledWith("display", "flex");
   });
 
-  it("keeps the existing position fields alongside the visual controls", () => {
-    render(<LayoutPanel values={{}} onChange={vi.fn()} />);
+  it("routes every position property through the box model, with no duplicate rows", () => {
+    render(<LayoutPanel values={{ position: "fixed" }} onChange={vi.fn()} />);
+    expandAdvanced();
+
+    // The old panel had a labelled row per offset next to the visual controls,
+    // so "Position" appeared twice and left/top were editable in two places.
     for (const label of ["Top", "Right", "Bottom", "Left", "Z-Index"]) {
-      expect(screen.getByText(label)).toBeTruthy();
+      expect(screen.queryByText(label)).toBeNull();
     }
-    // display, flex-direction, justify, align, wrap, position, overflow-x, overflow-y
+    for (const side of ["top", "right", "bottom", "left"]) {
+      expect(screen.getByLabelText(`${side} offset`)).toBeTruthy();
+    }
+    expect(screen.getByLabelText("z-index")).toBeTruthy();
+
+    // display, flex-direction, justify, align, wrap, overflow-x, overflow-y —
+    // the standalone position select is gone, absorbed by the section header.
     expect(screen.getAllByRole("combobox")).toHaveLength(8);
+    expect(screen.getByLabelText("Position mode")).toBeTruthy();
   });
 });
 
@@ -272,59 +301,264 @@ describe("PositionControls — alignment", () => {
 });
 
 describe("PositionControls — X/Y", () => {
-  it("shows the measured offset when no inset is authored", () => {
-    render(
-      <PositionControls
-        element={parentEl("block")}
-        values={{}}
-        onChange={vi.fn()}
-      />
-    );
-    expect(screen.getByDisplayValue("418")).toBeTruthy();
-    expect(screen.getByDisplayValue("150")).toBeTruthy();
-  });
-
-  it("prefers the authored inset over the measured offset", () => {
-    render(
-      <PositionControls
-        element={parentEl("block")}
-        values={{ position: "relative", left: "24px" }}
-        onChange={vi.fn()}
-      />
-    );
-    expect(screen.getByDisplayValue("24")).toBeTruthy();
-  });
-
-  it("writes left/top and promotes a static element to relative", () => {
+  // X/Y write `translate`, not left/top: the box model owns the offsets, and
+  // two controls editing the same property was the ambiguity being removed.
+  it("writes translate rather than left/top", () => {
     const onChange = vi.fn();
     render(
       <PositionControls
         element={parentEl("block")}
-        values={{}}
+        values={{ position: "relative" }}
         onChange={onChange}
       />
     );
-    const x = screen.getByDisplayValue("418");
-    fireEvent.blur(x, { target: { value: "40" } });
-    expect(onChange).toHaveBeenCalledWith("position", "relative");
-    expect(onChange).toHaveBeenCalledWith("left", "40px");
-    expect(screen.getByText("position changed to relative")).toBeTruthy();
-  });
-
-  it("leaves position alone when the element is already positioned", () => {
-    const onChange = vi.fn();
-    render(
-      <PositionControls
-        element={parentEl("block")}
-        values={{ position: "absolute" }}
-        onChange={onChange}
-      />
-    );
-    fireEvent.blur(screen.getByDisplayValue("150"), {
-      target: { value: "12" },
+    fireEvent.blur(screen.getByLabelText("translate X"), {
+      target: { value: "40" },
     });
-    expect(onChange).toHaveBeenCalledWith("top", "12px");
-    expect(onChange).not.toHaveBeenCalledWith("position", "relative");
+    expect(onChange).toHaveBeenCalledWith("transform", "translate(40px, 0)");
+    expect(onChange).not.toHaveBeenCalledWith("left", expect.anything());
+  });
+
+  it("keeps the other axis when one is edited", () => {
+    const onChange = vi.fn();
+    render(
+      <PositionControls
+        element={parentEl("block")}
+        values={{ position: "relative", transform: "translate(10px, 5px)" }}
+        onChange={onChange}
+      />
+    );
+    fireEvent.blur(screen.getByLabelText("translate Y"), {
+      target: { value: "8" },
+    });
+    expect(onChange).toHaveBeenCalledWith("transform", "translate(10px, 8px)");
+  });
+
+  it("reads the existing translate into the fields", () => {
+    render(
+      <PositionControls
+        element={parentEl("block")}
+        values={{ position: "relative", transform: "translate(12px, 3px)" }}
+        onChange={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText("translate X")).toHaveProperty(
+      "value",
+      "12px"
+    );
+    expect(screen.getByLabelText("translate Y")).toHaveProperty("value", "3px");
+  });
+
+  it("preserves the rotation when a translate is typed", () => {
+    const onChange = vi.fn();
+    render(
+      <PositionControls
+        element={parentEl("block")}
+        values={{ position: "relative", transform: "rotate(90deg)" }}
+        onChange={onChange}
+      />
+    );
+    fireEvent.blur(screen.getByLabelText("translate X"), {
+      target: { value: "5" },
+    });
+    expect(onChange).toHaveBeenCalledWith(
+      "transform",
+      "translate(5px, 0) rotate(90deg)"
+    );
+  });
+});
+
+describe("PositionControls — box model", () => {
+  const positioned = { position: "fixed" };
+
+  it("shows auto for an offset no rule declares", () => {
+    render(
+      <PositionControls
+        element={parentEl("block")}
+        values={{ ...positioned, top: "-99999px" }}
+        onChange={vi.fn()}
+      />
+    );
+    expandAdvanced();
+    // The computed value must never be presented as if it were authored.
+    const top = screen.getByLabelText("top offset");
+    expect(top).toHaveProperty("value", "");
+    expect(top.getAttribute("placeholder")).toBe("auto");
+  });
+
+  it("shows the authored value when a rule declares it", () => {
+    render(
+      <PositionControls
+        element={parentEl("block")}
+        values={positioned}
+        rules={[
+          {
+            selector: ".card",
+            source_file: "a.css",
+            rule_text: ".card { top: 24px }",
+            line_number: 1,
+            match_count: 1,
+          },
+        ]}
+        onChange={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText("top offset")).toHaveProperty("value", "24px");
+  });
+
+  it("assumes px for a bare number", () => {
+    const onChange = vi.fn();
+    render(
+      <PositionControls
+        element={parentEl("block")}
+        values={positioned}
+        onChange={onChange}
+      />
+    );
+    expandAdvanced();
+    fireEvent.blur(screen.getByLabelText("right offset"), {
+      target: { value: "24" },
+    });
+    expect(onChange).toHaveBeenCalledWith("right", "24px");
+  });
+
+  it("preserves an explicit unit", () => {
+    const onChange = vi.fn();
+    render(
+      <PositionControls
+        element={parentEl("block")}
+        values={positioned}
+        onChange={onChange}
+      />
+    );
+    expandAdvanced();
+    fireEvent.blur(screen.getByLabelText("bottom offset"), {
+      target: { value: "10%" },
+    });
+    expect(onChange).toHaveBeenCalledWith("bottom", "10%");
+  });
+
+  it("clears rather than writing a literal auto", () => {
+    const onChange = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <PositionControls
+        element={parentEl("block")}
+        values={positioned}
+        overrides={{ left: "8px" }}
+        onChange={onChange}
+        onClear={onClear}
+      />
+    );
+    fireEvent.blur(screen.getByLabelText("left offset"), {
+      target: { value: "" },
+    });
+    expect(onClear).toHaveBeenCalledWith("left");
+    expect(onChange).not.toHaveBeenCalledWith("left", "auto");
+  });
+
+  it("names the containing block for each mode", () => {
+    const { rerender } = render(
+      <PositionControls
+        element={parentEl("block")}
+        values={positioned}
+        onChange={vi.fn()}
+      />
+    );
+    expandAdvanced();
+    expect(screen.getByText("viewport")).toBeTruthy();
+
+    rerender(
+      <PositionControls
+        element={parentEl("block")}
+        values={{ position: "relative" }}
+        onChange={vi.fn()}
+      />
+    );
+    // The section stays expanded across the change of mode.
+    expect(screen.getByText("self")).toBeTruthy();
+  });
+
+  it("hides the box model and layer stepper under static", () => {
+    render(
+      <PositionControls
+        element={parentEl("block")}
+        values={{ position: "static" }}
+        onChange={vi.fn()}
+      />
+    );
+    expect(screen.queryByLabelText("top offset")).toBeNull();
+    expect(screen.queryByLabelText("z-index")).toBeNull();
+    // The rest of the section stays.
+    expect(screen.getByLabelText("Position mode")).toBeTruthy();
+    expect(screen.getByLabelText("translate X")).toBeTruthy();
+  });
+
+  it("restores the offsets when leaving static", () => {
+    const values = { position: "fixed", top: "" };
+    const { rerender } = render(
+      <PositionControls
+        element={parentEl("block")}
+        values={values}
+        overrides={{ top: "16px" }}
+        onChange={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText("top offset")).toHaveProperty("value", "16px");
+
+    rerender(
+      <PositionControls
+        element={parentEl("block")}
+        values={{ position: "static" }}
+        overrides={{ top: "16px" }}
+        onChange={vi.fn()}
+      />
+    );
+    expect(screen.queryByLabelText("top offset")).toBeNull();
+
+    rerender(
+      <PositionControls
+        element={parentEl("block")}
+        values={values}
+        overrides={{ top: "16px" }}
+        onChange={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText("top offset")).toHaveProperty("value", "16px");
+  });
+});
+
+describe("PositionControls — layer stepper", () => {
+  it("steps the z-index with the arrows", () => {
+    const onChange = vi.fn();
+    render(
+      <PositionControls
+        element={parentEl("block")}
+        values={{ position: "fixed" }}
+        overrides={{ "z-index": "3" }}
+        onChange={onChange}
+      />
+    );
+    fireEvent.click(screen.getByLabelText("Bring forward"));
+    expect(onChange).toHaveBeenCalledWith("z-index", "4");
+
+    // Steps build on what the stepper now shows, so going back returns to 3.
+    onChange.mockClear();
+    fireEvent.click(screen.getByLabelText("Send backward"));
+    expect(onChange).toHaveBeenCalledWith("z-index", "3");
+  });
+
+  it("steps down from an unset z-index", () => {
+    const onChange = vi.fn();
+    render(
+      <PositionControls
+        element={parentEl("block")}
+        values={{ position: "fixed", "z-index": "auto" }}
+        onChange={onChange}
+      />
+    );
+    fireEvent.click(screen.getByLabelText("Send backward"));
+    expect(onChange).toHaveBeenCalledWith("z-index", "-1");
   });
 });
 

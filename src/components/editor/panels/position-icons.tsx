@@ -13,20 +13,62 @@ const SVG = {
 };
 
 /** Edge line + two bars, mirroring Figma's align glyphs. */
-const ALIGN_GEOMETRY: Record<AlignAxis, Record<AlignMode, { line: string; bars: number[][] }>> = {
+const ALIGN_GEOMETRY: Record<
+  AlignAxis,
+  Record<AlignMode, { line: string; bars: number[][] }>
+> = {
   h: {
-    start: { line: "M1.5 1.5V12.5", bars: [[3.5, 3, 8, 3], [3.5, 8, 5, 3]] },
-    center: { line: "M7 1.5V12.5", bars: [[2, 3, 10, 3], [4, 8, 6, 3]] },
-    end: { line: "M12.5 1.5V12.5", bars: [[2.5, 3, 8, 3], [5.5, 8, 5, 3]] },
+    start: {
+      line: "M1.5 1.5V12.5",
+      bars: [
+        [3.5, 3, 8, 3],
+        [3.5, 8, 5, 3],
+      ],
+    },
+    center: {
+      line: "M7 1.5V12.5",
+      bars: [
+        [2, 3, 10, 3],
+        [4, 8, 6, 3],
+      ],
+    },
+    end: {
+      line: "M12.5 1.5V12.5",
+      bars: [
+        [2.5, 3, 8, 3],
+        [5.5, 8, 5, 3],
+      ],
+    },
   },
   v: {
-    start: { line: "M1.5 1.5H12.5", bars: [[3, 3.5, 3, 8], [8, 3.5, 3, 5]] },
-    center: { line: "M1.5 7H12.5", bars: [[3, 2, 3, 10], [8, 4, 3, 6]] },
-    end: { line: "M1.5 12.5H12.5", bars: [[3, 2.5, 3, 8], [8, 5.5, 3, 5]] },
+    start: {
+      line: "M1.5 1.5H12.5",
+      bars: [
+        [3, 3.5, 3, 8],
+        [8, 3.5, 3, 5],
+      ],
+    },
+    center: {
+      line: "M1.5 7H12.5",
+      bars: [
+        [3, 2, 3, 10],
+        [8, 4, 3, 6],
+      ],
+    },
+    end: {
+      line: "M1.5 12.5H12.5",
+      bars: [
+        [3, 2.5, 3, 8],
+        [8, 5.5, 3, 5],
+      ],
+    },
   },
 };
 
-export function AlignIcon(props: { axis: AlignAxis; mode: AlignMode }): JSX.Element {
+export function AlignIcon(props: {
+  axis: AlignAxis;
+  mode: AlignMode;
+}): JSX.Element {
   const g = ALIGN_GEOMETRY[props.axis][props.mode];
   return (
     <svg {...SVG}>
@@ -72,6 +114,35 @@ export function AngleIcon(): JSX.Element {
     <svg {...SVG} style={{ color: "var(--color-muted)", flexShrink: 0 }}>
       <path d="M2.5 2.5v9h9" />
       <path d="M11 8.2a6 6 0 0 0-5.2-5.2" />
+    </svg>
+  );
+}
+
+/** Marks the containing block at the centre of the box-model diagram. */
+export function PinIcon(): JSX.Element {
+  return (
+    <svg {...SVG} style={{ color: "var(--color-accent-light)" }}>
+      <path d="M7 8.5v4" />
+      <path d="M4.2 2h5.6l-.8 3.2 1.5 1.6H3.5L5 5.2z" />
+    </svg>
+  );
+}
+
+/** Layer stepper arrows: send backward / bring forward. */
+export function ArrowDownIcon(): JSX.Element {
+  return (
+    <svg {...SVG}>
+      <path d="M7 2.5v9" />
+      <path d="M3.5 8 7 11.5 10.5 8" />
+    </svg>
+  );
+}
+
+export function ArrowUpIcon(): JSX.Element {
+  return (
+    <svg {...SVG}>
+      <path d="M7 11.5v-9" />
+      <path d="M3.5 6 7 2.5 10.5 6" />
     </svg>
   );
 }

@@ -53,7 +53,9 @@ export function App(): JSX.Element | null {
   const [mode, setMode] = useState<AppMode>("setup");
   const [freeEdit, setFreeEdit] = useState(false);
   const [allOverrides, setAllOverrides] = useState<OverridesByState>({});
-  const [snapshotCache, setSnapshotCache] = useState<Record<string, AgentSnapshot>>({});
+  const [snapshotCache, setSnapshotCache] = useState<
+    Record<string, AgentSnapshot>
+  >({});
   const [inputKey, setInputKey] = useState(0);
   const projectRootRef = useRef("");
   const textRef = useRef("");
@@ -65,7 +67,10 @@ export function App(): JSX.Element | null {
   }, [session, license.loading]);
 
   useEffect(() => {
-    const fallback = setTimeout(() => invoke("show_window").catch(() => {}), 3000);
+    const fallback = setTimeout(
+      () => invoke("show_window").catch(() => {}),
+      3000
+    );
     return () => clearTimeout(fallback);
   }, []);
 
@@ -80,20 +85,25 @@ export function App(): JSX.Element | null {
     }
   }, [agent.snapshot, elementKey]);
 
-  const baseSnapshot = elementKey ? (snapshotCache[elementKey] ?? agent.snapshot) : agent.snapshot;
+  const baseSnapshot = elementKey
+    ? (snapshotCache[elementKey] ?? agent.snapshot)
+    : agent.snapshot;
   const elementOverrides = elementKey ? (allOverrides[elementKey] ?? {}) : {};
   const pseudo = usePseudoState(agent.snapshot, baseSnapshot, elementOverrides);
 
-  const handleReady = useCallback(async (projectRoot: string) => {
-    await invoke("set_project_root", { path: projectRoot });
-    // Use the canonical form the backend resolved: a root typed without its
-    // drive letter still opens, but would never match the absolute paths the
-    // AI reports back.
-    projectRootRef.current =
-      (await invoke<string | null>("get_project_root")) ?? projectRoot;
-    await agent.startEditing();
-    setMode("editing");
-  }, [agent]);
+  const handleReady = useCallback(
+    async (projectRoot: string) => {
+      await invoke("set_project_root", { path: projectRoot });
+      // Use the canonical form the backend resolved: a root typed without its
+      // drive letter still opens, but would never match the absolute paths the
+      // AI reports back.
+      projectRootRef.current =
+        (await invoke<string | null>("get_project_root")) ?? projectRoot;
+      await agent.startEditing();
+      setMode("editing");
+    },
+    [agent]
+  );
 
   const handleChange = useCallback(
     (prop: string, value: string, options?: { preview?: boolean }) => {
@@ -118,7 +128,30 @@ export function App(): JSX.Element | null {
         agent.previewPseudoStyle(prop, value, ps);
       }
     },
-    [agent, elementKey, pseudo.activeState],
+    [agent, elementKey, pseudo.activeState]
+  );
+
+  /**
+   * Drops a property from this element's pending edits.
+   *
+   * Distinct from writing `auto`: clearing a field must leave no declaration
+   * behind, so the EditPlan never carries a property the developer removed.
+   * The page keeps the preview it already applied until the next snapshot
+   * re-reads the element — the agent has no per-property revert.
+   */
+  const handleClear = useCallback(
+    (prop: string) => {
+      if (!elementKey) return;
+      const ps = pseudo.activeState;
+      setAllOverrides((prev) => {
+        const elMap = prev[elementKey];
+        const stateMap = elMap?.[ps];
+        if (!elMap || !stateMap || !(prop in stateMap)) return prev;
+        const { [prop]: _removed, ...rest } = stateMap;
+        return { ...prev, [elementKey]: { ...elMap, [ps]: rest } };
+      });
+    },
+    [elementKey, pseudo.activeState]
   );
 
   useGestureChanges((ev) => {
@@ -178,15 +211,23 @@ export function App(): JSX.Element | null {
   const snap = agent.snapshot;
   const firstClass = snap?.element.classes[0];
   const layerNodes: DomNode[] = snap
-    ? [{ id: "selected", tag: snap.element.tag, ...(firstClass ? { className: firstClass } : {}), depth: 0 }]
+    ? [
+        {
+          id: "selected",
+          tag: snap.element.tag,
+          ...(firstClass ? { className: firstClass } : {}),
+          depth: 0,
+        },
+      ]
     : [];
   const sourceSnippet = snap?.element.source_file
     ? `<${snap.element.tag} class="${snap.element.classes.join(" ")}">`
     : "";
 
-  const hasChanges = Object.values(allOverrides).some(
-    (stateMap) => Object.values(stateMap).some((props) => Object.keys(props).length > 0)
-  ) || textRef.current.length > 0;
+  const hasChanges =
+    Object.values(allOverrides).some((stateMap) =>
+      Object.values(stateMap).some((props) => Object.keys(props).length > 0)
+    ) || textRef.current.length > 0;
 
   return (
     <EditorShell
@@ -204,6 +245,15 @@ export function App(): JSX.Element | null {
           element={snap?.element ?? null}
           values={pseudo.mergedValues}
           onChange={handleChange}
+          onClear={handleClear}
+          overrides={
+            (elementKey
+              ? allOverrides[elementKey]?.[pseudo.activeState]
+              : undefined) ?? {}
+          }
+          {...(snap?.styling.matching_rules
+            ? { rules: snap.styling.matching_rules }
+            : {})}
           pseudo={{
             availableStates: pseudo.availableStates,
             activeState: pseudo.activeState,
@@ -220,7 +270,9 @@ export function App(): JSX.Element | null {
         <ProgressMarker
           items={Object.entries(allOverrides)
             .filter(([, stateMap]) =>
-              Object.values(stateMap).some((props) => Object.keys(props).length > 0)
+              Object.values(stateMap).some(
+                (props) => Object.keys(props).length > 0
+              )
             )
             .map(([key]) => {
               const cached = snapshotCache[key];
@@ -235,8 +287,12 @@ export function App(): JSX.Element | null {
       aiInput={
         <AIInput
           key={inputKey}
-          onSubmit={(v): void => { textRef.current = v; }}
-          onChange={(v): void => { textRef.current = v; }}
+          onSubmit={(v): void => {
+            textRef.current = v;
+          }}
+          onChange={(v): void => {
+            textRef.current = v;
+          }}
         />
       }
       applyBar={
